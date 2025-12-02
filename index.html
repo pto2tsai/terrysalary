@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>薪資管理系統 (V8 - 特休補薪版)</title>
+    <title>薪資管理系統 (V10 - 工時檢核版)</title>
     
     <!-- 1. 引入樣式與核心庫 -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -94,16 +94,18 @@
             { id: 2, name: '範例-李小美', empId: 'W0002', baseSalary: 42000, laborFee: 1200, healthFee: 800, title: '行政主管' },
         ];
 
-        // 資料結構 V8: 分離特休(補薪)與喪假(無)
+        // 資料結構 V10: 新增 expectedWorkDays, actualWorkHours
         const INITIAL_PAYROLL_DATA = [
             { 
                 empId: 1, period: '2025-11', 
-                wt134: 10, wt167: 0, 
+                wt034: 10, wt067: 0, 
                 hd134: 0, hd167: 0,  
-                earlyShift: 0, noLunch: 0, dayOffWork: 0, 
+                earlyShift: 0, noLunch: 0, holidayOT: 0, 
                 sickLeave: 0, personalLeave: 0, annualLeave: 0, bereavementLeave: 0,
                 lunchAllowance: 0, businessBonus: 0, 
-                deduction: 0, note: '' 
+                deduction: 0, 
+                expectedWorkDays: 20, actualWorkHours: 160, // 工時檢核欄位
+                note: '' 
             },
         ];
 
@@ -131,49 +133,61 @@
             useEffect(() => { localStorage.setItem('payroll_employees', JSON.stringify(employees)); }, [employees]);
             useEffect(() => { localStorage.setItem('payroll_data', JSON.stringify(payrollData)); }, [payrollData]);
 
-            // --- V8 核心薪資計算 ---
+            // --- V10 核心薪資計算 (含缺勤扣款) ---
             const calculateSalary = (emp, data) => {
                 if (!emp) return null;
-                const d = data || { wt134:0, wt167:0, hd134:0, hd167:0, earlyShift:0, noLunch:0, dayOffWork:0, sickLeave:0, personalLeave:0, annualLeave:0, lunchAllowance:0, businessBonus:0, deduction:0 };
+                const d = data || { wt034:0, wt067:0, hd134:0, hd167:0, earlyShift:0, noLunch:0, holidayOT:0, sickLeave:0, personalLeave:0, annualLeave:0, lunchAllowance:0, businessBonus:0, deduction:0, expectedWorkDays:0, actualWorkHours:0 };
                 
                 const hourlyRate = Math.round(emp.baseSalary / 240);
                 
                 // 加項
-                const payWt = Math.round((d.wt134 * 1.34 + d.wt167 * 1.67) * hourlyRate);
-                const payHd = Math.round((d.hd134 * 1.34 + d.hd167 * 1.67) * hourlyRate);
-                const payEarly = Math.round(d.earlyShift * 1.34 * hourlyRate);
-                const payNoLunch = Math.round(d.noLunch * 1.34 * hourlyRate);
-                const payDayOff = Math.round(d.dayOffWork * 2.0 * hourlyRate); 
+                const payWt034 = Math.round(d.wt034 * 0.34 * hourlyRate);
+                const payWt067 = Math.round(d.wt067 * 0.67 * hourlyRate);
+                const payHd134 = Math.round(d.hd134 * 1.34 * hourlyRate);
+                const payHd167 = Math.round(d.hd167 * 1.67 * hourlyRate);
+                const payEarly = Math.round(d.earlyShift * 0.34 * hourlyRate);
+                const payNoLunch = Math.round(d.noLunch * 0.34 * hourlyRate);
+                const payHolidayOT = Math.round(d.holidayOT * 1.34 * hourlyRate);
                 
-                // 特休：補給薪 (1.0倍)
-                const payAnnual = Math.round(d.annualLeave * 1.0 * hourlyRate);
-
                 const allowances = (parseInt(d.lunchAllowance) || 0) + (parseInt(d.businessBonus) || 0);
 
-                const totalAdditions = payWt + payHd + payEarly + payNoLunch + payDayOff + payAnnual + allowances;
+                const totalAdditions = payWt034 + payWt067 + payHd134 + payHd167 + payEarly + payNoLunch + payHolidayOT + allowances;
                 const grossPay = emp.baseSalary + totalAdditions;
 
                 // 扣項
-                const dedSick = Math.round(d.sickLeave * 0.5 * hourlyRate); // 病假扣半
-                const dedPersonal = Math.round(d.personalLeave * 1.0 * hourlyRate); // 事假扣全
-                // 喪假 (bereavementLeave) 不扣薪，金額 0
+                const dedSick = Math.round(d.sickLeave * 0.5 * hourlyRate);
+                const dedPersonal = Math.round(d.personalLeave * 1.0 * hourlyRate);
+                
+                // 缺勤扣款 (Absence Deduction)
+                // 應上班時數 = 應上班天數 * 8
+                const expectedHours = (d.expectedWorkDays || 0) * 8;
+                const actualHours = d.actualWorkHours || 0;
+                let absenceHours = 0;
+                let dedAbsence = 0;
+
+                if (expectedHours > 0 && actualHours < expectedHours) {
+                    absenceHours = parseFloat((expectedHours - actualHours).toFixed(2));
+                    dedAbsence = Math.round(absenceHours * hourlyRate); // 缺勤時數 * 時薪
+                }
 
                 let insuranceFee = 0;
                 let finalDeduction = 0;
 
                 if (d.hasImportedInsurance) {
                     insuranceFee = parseInt(d.deduction) || 0;
-                    finalDeduction = dedSick + dedPersonal + insuranceFee; 
+                    finalDeduction = dedSick + dedPersonal + dedAbsence + insuranceFee; 
                 } else {
                     insuranceFee = emp.laborFee + emp.healthFee;
-                    finalDeduction = dedSick + dedPersonal + insuranceFee + (parseInt(d.deduction) || 0);
+                    finalDeduction = dedSick + dedPersonal + dedAbsence + insuranceFee + (parseInt(d.deduction) || 0);
                 }
 
                 const netPay = grossPay - finalDeduction;
 
                 return { 
-                    hourlyRate, payWt, payHd, payEarly, payNoLunch, payDayOff, payAnnual,
-                    dedSick, dedPersonal, totalAdditions, finalDeduction, netPay, insuranceFee, grossPay
+                    hourlyRate, 
+                    payWt034, payWt067, payHd134, payHd167, payEarly, payNoLunch, payHolidayOT,
+                    dedSick, dedPersonal, dedAbsence, absenceHours, expectedHours,
+                    totalAdditions, finalDeduction, netPay, insuranceFee, grossPay
                 };
             };
 
@@ -183,13 +197,16 @@
                     if (!data) data = { empId: emp.id, period: currentPeriod };
                     
                     const safeData = {
-                        wt134: data.wt134 || 0, wt167: data.wt167 || 0,
+                        wt034: data.wt034 || 0, wt067: data.wt067 || 0,
                         hd134: data.hd134 || 0, hd167: data.hd167 || 0,
-                        earlyShift: data.earlyShift || 0, noLunch: data.noLunch || 0, dayOffWork: data.dayOffWork || 0,
+                        earlyShift: data.earlyShift || 0, noLunch: data.noLunch || 0, holidayOT: data.holidayOT || 0,
                         sickLeave: data.sickLeave || 0, personalLeave: data.personalLeave || 0, 
                         annualLeave: data.annualLeave || 0, bereavementLeave: data.bereavementLeave || 0,
                         lunchAllowance: data.lunchAllowance || 0, businessBonus: data.businessBonus || 0,
-                        deduction: data.deduction || 0, note: data.note || '', hasImportedInsurance: data.hasImportedInsurance
+                        deduction: data.deduction || 0, note: data.note || '', 
+                        hasImportedInsurance: data.hasImportedInsurance,
+                        expectedWorkDays: data.expectedWorkDays || 0,
+                        actualWorkHours: data.actualWorkHours || 0
                     };
                     return { ...emp, ...safeData, ...calculateSalary(emp, safeData) };
                 });
@@ -259,7 +276,7 @@
                         const headers = data[hRow];
                         const rows = data.slice(hRow+1);
                         
-                        const idx = { id:-1, name:-1, wt134:[], wt167:[], hd134:[], hd167:[], early:-1, noLunch:-1, dayOff:-1, lunch:-1, bonus:-1, ins:-1, note:-1 };
+                        const idx = { id:-1, name:-1, wt034:[], wt067:[], hd134:[], hd167:[], early:-1, noLunch:-1, holidayOT:-1, lunch:-1, bonus:-1, ins:-1, note:-1, expDays:-1, actHours:-1 };
                         let satIdx = headers.findIndex(h => String(h).includes("星期六") || String(h).includes("假日"));
                         
                         headers.forEach((h, i) => {
@@ -267,18 +284,26 @@
                             if(t.includes("員工編號")) idx.id = i;
                             else if(t.includes("員工姓名")) idx.name = i;
                             else if(t.includes("1.33") || t.includes("1.34")) {
-                                if(satIdx > -1 && i > satIdx) idx.hd134.push(i); else idx.wt134.push(i);
+                                if(satIdx > -1 && i > satIdx) idx.hd134.push(i); else idx.wt034.push(i);
                             }
                             else if(t.includes("1.66") || t.includes("1.67")) {
-                                if(satIdx > -1 && i > satIdx) idx.hd167.push(i); else idx.wt167.push(i);
+                                if(satIdx > -1 && i > satIdx) idx.hd167.push(i); else idx.wt067.push(i);
                             }
                             else if(t.includes("提前")) idx.early = i;
                             else if(t.includes("中午")) idx.noLunch = i;
-                            else if(t.includes("星期日")) idx.dayOff = i;
+                            else if(t.includes("星期日")) idx.holidayOT = i;
                             else if(t.includes("午餐") || t.includes("補助")) idx.lunch = i;
                             else if(t.includes("業務") || t.includes("職務")) idx.bonus = i;
                             else if(t.includes("勞健保")) idx.ins = i;
                             else if(t.includes("備註")) idx.note = i;
+                            
+                            // 新增工時欄位偵測
+                            else if(t.includes("應上班") || t.includes("應出勤")) {
+                                if(t.includes("次數") || t.includes("天數")) idx.expDays = i;
+                            }
+                            else if(t.includes("實上班") || t.includes("實際出勤")) {
+                                if(t.includes("時數")) idx.actHours = i;
+                            }
                         });
                         if(idx.note === -1) idx.note = headers.length -1;
 
@@ -298,25 +323,31 @@
                             }
 
                             if(emp) {
-                                let wt134=0, wt167=0, hd134=0, hd167=0;
-                                idx.wt134.forEach(c => wt134 += parseTime(row[c]));
-                                idx.wt167.forEach(c => wt167 += parseTime(row[c]));
+                                let wt034=0, wt067=0, hd134=0, hd167=0;
+                                idx.wt034.forEach(c => wt034 += parseTime(row[c]));
+                                idx.wt067.forEach(c => wt067 += parseTime(row[c]));
                                 idx.hd134.forEach(c => hd134 += parseTime(row[c]));
                                 idx.hd167.forEach(c => hd167 += parseTime(row[c]));
 
                                 const noteText = String(row[idx.note]||"");
                                 const { sick, personal, annual, bereavement } = parseLeave(noteText);
 
+                                // 工時
+                                let expDays = parseInt(row[idx.expDays]) || 0;
+                                let actHours = parseTime(row[idx.actHours]);
+
                                 const entry = {
                                     empId: emp.id, period: currentPeriod,
-                                    wt134, wt167, hd134, hd167,
+                                    wt034, wt067, hd134, hd167,
                                     earlyShift: parseTime(row[idx.early]),
                                     noLunch: parseTime(row[idx.noLunch]),
-                                    dayOffWork: parseTime(row[idx.dayOff]),
+                                    holidayOT: parseTime(row[idx.holidayOT]),
                                     lunchAllowance: parseInt(row[idx.lunch])||0,
                                     businessBonus: parseInt(row[idx.bonus])||0,
                                     deduction: parseInt(row[idx.ins])||0,
                                     hasImportedInsurance: !!(parseInt(row[idx.ins])),
+                                    expectedWorkDays: expDays,
+                                    actualWorkHours: actHours,
                                     sickLeave: parseFloat(sick.toFixed(2)),
                                     personalLeave: parseFloat(personal.toFixed(2)),
                                     annualLeave: parseFloat(annual.toFixed(2)),
@@ -333,7 +364,7 @@
                         setEmployees(newEmps);
                         setPayrollData(newPayroll);
                         setIsImportModalOpen(false);
-                        alert(`成功匯入 ${count} 筆資料！`);
+                        alert(`成功匯入 ${count} 筆資料！\n已更新工時檢核與缺勤扣款。`);
 
                     } catch(err) { console.error(err); alert("匯入失敗: " + err.message); }
                     if(fileInputRef.current) fileInputRef.current.value = '';
@@ -341,6 +372,7 @@
                 reader.readAsBinaryString(file);
             };
 
+            // ... Employee CRUD & Bulk Logic ...
             const handleSaveEmployee = (e) => {
                 e.preventDefault();
                 const fd = new FormData(e.target);
@@ -375,7 +407,7 @@
                 <div className="min-h-screen pb-10">
                     <nav className="bg-slate-800 text-white shadow-lg print-hidden sticky top-0 z-40">
                         <div className="max-w-7xl mx-auto px-4 flex justify-between h-16 items-center">
-                            <div className="flex items-center space-x-2"><Icons.Calculator className="w-6 h-6 text-yellow-400"/><span className="font-bold text-xl">薪資管理系統 V8</span></div>
+                            <div className="flex items-center space-x-2"><Icons.Calculator className="w-6 h-6 text-yellow-400"/><span className="font-bold text-xl">薪資管理系統 V10</span></div>
                             <div className="flex space-x-2">
                                 <button onClick={()=>setActiveTab('employees')} className={`px-3 py-1 rounded ${activeTab==='employees'?'bg-yellow-500 text-black':'hover:bg-slate-700'}`}>設定</button>
                                 <button onClick={()=>setActiveTab('input')} className={`px-3 py-1 rounded ${activeTab==='input'?'bg-yellow-500 text-black':'hover:bg-slate-700'}`}>結算</button>
@@ -420,18 +452,19 @@
                                     <thead className="bg-slate-100">
                                         <tr>
                                             <th className="p-2 text-left sticky left-0 bg-slate-100">員工</th>
-                                            <th className="p-2 bg-blue-50 text-blue-700">平加<br/>1.34</th>
-                                            <th className="p-2 bg-blue-50 text-blue-700">平加<br/>1.67</th>
+                                            <th className="p-2 bg-gray-50 text-slate-700">應出<br/>勤日</th>
+                                            <th className="p-2 bg-gray-50 text-slate-700">實工<br/>時數</th>
+                                            <th className="p-2 bg-blue-50 text-blue-700">平加<br/>0.34</th>
+                                            <th className="p-2 bg-blue-50 text-blue-700">平加<br/>0.67</th>
                                             <th className="p-2 bg-purple-50 text-purple-700">例加<br/>1.34</th>
                                             <th className="p-2 bg-purple-50 text-purple-700">例加<br/>1.67</th>
-                                            <th className="p-2">提早<br/>1.34</th>
-                                            <th className="p-2">未休<br/>1.34</th>
-                                            <th className="p-2">休加<br/>2.0</th>
-                                            <th className="p-2 text-emerald-700">特休<br/>補薪</th>
+                                            <th className="p-2">提早<br/>0.34</th>
+                                            <th className="p-2">未休<br/>0.34</th>
+                                            <th className="p-2">休加<br/>1.34</th>
                                             <th className="p-2 text-green-700">午餐<br/>津貼</th>
-                                            <th className="p-2 text-green-700">業務<br/>加給</th>
                                             <th className="p-2 text-red-700">病假<br/>0.5</th>
                                             <th className="p-2 text-red-800">事/颱<br/>1.0</th>
+                                            <th className="p-2 text-red-900 font-bold">缺勤<br/>扣款</th>
                                             <th className="p-2 text-orange-700">勞健<br/>扣款</th>
                                             <th className="p-2 sticky right-0 bg-slate-100">實發</th>
                                         </tr>
@@ -440,18 +473,19 @@
                                         {fullPayrollList.map(item => (
                                             <tr key={item.id} className="border-b hover:bg-gray-50">
                                                 <td className="p-2 sticky left-0 bg-white font-bold">{item.name}</td>
-                                                <td className="p-1 bg-blue-50"><input type="number" className="w-10 border" value={item.wt134} onChange={e=>updateVal(item.id,'wt134',e.target.value)}/></td>
-                                                <td className="p-1 bg-blue-50"><input type="number" className="w-10 border" value={item.wt167} onChange={e=>updateVal(item.id,'wt167',e.target.value)}/></td>
+                                                <td className="p-1"><input type="number" className="w-10 border bg-gray-50" value={item.expectedWorkDays} onChange={e=>updateVal(item.id,'expectedWorkDays',e.target.value)}/></td>
+                                                <td className="p-1"><input type="number" className="w-12 border bg-gray-50" value={item.actualWorkHours} onChange={e=>updateVal(item.id,'actualWorkHours',e.target.value)}/></td>
+                                                <td className="p-1 bg-blue-50"><input type="number" className="w-10 border" value={item.wt034} onChange={e=>updateVal(item.id,'wt034',e.target.value)}/></td>
+                                                <td className="p-1 bg-blue-50"><input type="number" className="w-10 border" value={item.wt067} onChange={e=>updateVal(item.id,'wt067',e.target.value)}/></td>
                                                 <td className="p-1 bg-purple-50"><input type="number" className="w-10 border" value={item.hd134} onChange={e=>updateVal(item.id,'hd134',e.target.value)}/></td>
                                                 <td className="p-1 bg-purple-50"><input type="number" className="w-10 border" value={item.hd167} onChange={e=>updateVal(item.id,'hd167',e.target.value)}/></td>
                                                 <td className="p-1"><input type="number" className="w-10 border" value={item.earlyShift} onChange={e=>updateVal(item.id,'earlyShift',e.target.value)}/></td>
                                                 <td className="p-1"><input type="number" className="w-10 border" value={item.noLunch} onChange={e=>updateVal(item.id,'noLunch',e.target.value)}/></td>
-                                                <td className="p-1"><input type="number" className="w-10 border" value={item.dayOffWork} onChange={e=>updateVal(item.id,'dayOffWork',e.target.value)}/></td>
-                                                <td className="p-1 bg-emerald-50"><input type="number" className="w-10 border" value={item.annualLeave} onChange={e=>updateVal(item.id,'annualLeave',e.target.value)}/></td>
+                                                <td className="p-1"><input type="number" className="w-10 border" value={item.holidayOT} onChange={e=>updateVal(item.id,'holidayOT',e.target.value)}/></td>
                                                 <td className="p-1"><input type="number" className="w-12 border" value={item.lunchAllowance} onChange={e=>updateVal(item.id,'lunchAllowance',e.target.value)}/></td>
-                                                <td className="p-1"><input type="number" className="w-12 border" value={item.businessBonus} onChange={e=>updateVal(item.id,'businessBonus',e.target.value)}/></td>
                                                 <td className="p-1"><input type="number" className="w-10 border" value={item.sickLeave} onChange={e=>updateVal(item.id,'sickLeave',e.target.value)}/></td>
                                                 <td className="p-1"><input type="number" className="w-10 border" value={item.personalLeave} onChange={e=>updateVal(item.id,'personalLeave',e.target.value)}/></td>
+                                                <td className="p-1 text-red-600 font-bold text-center">{item.dedAbsence > 0 ? `-${item.dedAbsence}` : '-'}</td>
                                                 <td className="p-1"><input type="number" className="w-12 border" value={item.deduction} onChange={e=>updateVal(item.id,'deduction',e.target.value)}/></td>
                                                 <td className="p-2 sticky right-0 bg-white font-bold text-blue-700">${item.netPay.toLocaleString()}</td>
                                             </tr>
@@ -478,12 +512,13 @@
                                                 <div className="border-r pr-2">
                                                     <div className="font-bold text-slate-500 mb-1">應發項目 (+)</div>
                                                     <div className="flex justify-between"><span>本薪</span><span>{item.baseSalary}</span></div>
-                                                    {item.payWt>0 && <div className="flex justify-between text-blue-700"><span>平日加班</span><span>{item.payWt}</span></div>}
-                                                    {item.payHd>0 && <div className="flex justify-between text-purple-700"><span>例假加班</span><span>{item.payHd}</span></div>}
-                                                    {item.payEarly>0 && <div className="flex justify-between"><span>提早上班</span><span>{item.payEarly}</span></div>}
-                                                    {item.payNoLunch>0 && <div className="flex justify-between"><span>中午未休</span><span>{item.payNoLunch}</span></div>}
-                                                    {item.payDayOff>0 && <div className="flex justify-between"><span>休假加班</span><span>{item.payDayOff}</span></div>}
-                                                    {item.payAnnual>0 && <div className="flex justify-between text-emerald-700"><span>特休補薪</span><span>{item.payAnnual}</span></div>}
+                                                    {item.payWt034>0 && <div className="flex justify-between text-blue-700"><span>平日(0.34)</span><span>{item.payWt034}</span></div>}
+                                                    {item.payWt067>0 && <div className="flex justify-between text-blue-700"><span>平日(0.67)</span><span>{item.payWt067}</span></div>}
+                                                    {item.payHd134>0 && <div className="flex justify-between text-purple-700"><span>例假(1.34)</span><span>{item.payHd134}</span></div>}
+                                                    {item.payHd167>0 && <div className="flex justify-between text-purple-700"><span>例假(1.67)</span><span>{item.payHd167}</span></div>}
+                                                    {item.payEarly>0 && <div className="flex justify-between"><span>提早(0.34)</span><span>{item.payEarly}</span></div>}
+                                                    {item.payNoLunch>0 && <div className="flex justify-between"><span>未休(0.34)</span><span>{item.payNoLunch}</span></div>}
+                                                    {item.payHolidayOT>0 && <div className="flex justify-between"><span>休加(1.34)</span><span>{item.payHolidayOT}</span></div>}
                                                     {item.lunchAllowance>0 && <div className="flex justify-between text-green-700"><span>午餐津貼</span><span>{item.lunchAllowance}</span></div>}
                                                     {item.businessBonus>0 && <div className="flex justify-between text-green-700"><span>業務加給</span><span>{item.businessBonus}</span></div>}
                                                     <div className="border-t mt-1 pt-1 font-bold flex justify-between"><span>應發合計</span><span>{item.grossPay}</span></div>
@@ -491,6 +526,7 @@
                                                 <div className="pl-1">
                                                     <div className="font-bold text-slate-500 mb-1">應扣項目 (-)</div>
                                                     <div className="flex justify-between text-red-700"><span>勞健保</span><span>{item.insuranceFee}</span></div>
+                                                    {item.dedAbsence>0 && <div className="flex justify-between text-red-900"><span>缺勤扣款</span><span>{item.dedAbsence}</span></div>}
                                                     {item.dedSick>0 && <div className="flex justify-between text-red-600"><span>病假(0.5)</span><span>{item.dedSick}</span></div>}
                                                     {item.dedPersonal>0 && <div className="flex justify-between text-red-800"><span>事/颱(1.0)</span><span>{item.dedPersonal}</span></div>}
                                                     <div className="border-t mt-1 pt-1 font-bold flex justify-between"><span>應扣合計</span><span>{item.finalDeduction}</span></div>
@@ -498,7 +534,10 @@
                                             </div>
                                             <div className="mt-2 pt-2 border-t flex justify-between items-end">
                                                 <div className="text-xs text-gray-500 w-2/3 truncate">{item.note}</div>
-                                                <div className="text-right"><span className="text-xs mr-1">實發</span><span className="text-xl font-bold font-mono">${item.netPay.toLocaleString()}</span></div>
+                                                <div className="text-right">
+                                                    <div className="text-xs text-gray-400 mb-1">實勤: {item.actualWorkHours} / 應勤: {item.expectedHours}</div>
+                                                    <span className="text-xs mr-1">實發</span><span className="text-xl font-bold font-mono">${item.netPay.toLocaleString()}</span>
+                                                </div>
                                             </div>
                                         </div>
                                     ))}
@@ -506,7 +545,7 @@
                             </div>
                         )}
 
-                        {/* Modals: Import, Edit, Bulk - Same logic as before but updated fields if needed */}
+                        {/* Modals: Import, Edit, Bulk */}
                         {isImportModalOpen && <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"><div className="bg-white p-6 rounded shadow-xl w-full max-w-lg"><h3 className="font-bold text-lg mb-4">匯入 Excel</h3><input type="file" ref={fileInputRef} accept=".xlsx,.csv" onChange={handleExcel} className="border p-2 w-full"/><button onClick={()=>setIsImportModalOpen(false)} className="mt-4 px-4 py-2 bg-gray-200 rounded">關閉</button></div></div>}
                         {isEmpModalOpen && <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"><div className="bg-white p-6 rounded shadow-xl w-full max-w-sm"><h3 className="font-bold text-lg mb-4">編輯員工</h3><form onSubmit={handleSaveEmployee} className="space-y-3"><input name="empId" defaultValue={editingEmp?.empId} placeholder="ID" className="border p-2 w-full"/><input name="name" defaultValue={editingEmp?.name} placeholder="姓名" className="border p-2 w-full"/><input name="baseSalary" type="number" defaultValue={editingEmp?.baseSalary} placeholder="底薪" className="border p-2 w-full"/><div className="flex justify-end gap-2"><button type="button" onClick={()=>setIsEmpModalOpen(false)} className="px-3 py-1 border rounded">取消</button><button className="px-3 py-1 bg-blue-600 text-white rounded">儲存</button></div></form></div></div>}
                         {isBulkModalOpen && <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"><div className="bg-white p-6 rounded shadow-xl w-full max-w-sm"><h3 className="font-bold text-lg mb-4">批量調薪</h3><form onSubmit={handleBulkSubmit} className="space-y-3"><input type="number" value={bulkTargetSalary} onChange={e=>setBulkTargetSalary(e.target.value)} className="border p-2 w-full" placeholder="新底薪"/><div className="flex justify-end gap-2"><button type="button" onClick={()=>setIsBulkModalOpen(false)} className="px-3 py-1 border rounded">取消</button><button className="px-3 py-1 bg-orange-600 text-white rounded">執行</button></div></form></div></div>}
