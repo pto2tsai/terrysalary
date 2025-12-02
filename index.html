@@ -1,941 +1,651 @@
 ﻿<!DOCTYPE html>
-<html lang="zh-Hant">
+<html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>MES Lite 簡易工時採集</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>薪資管理系統 (V13 - 分鐘制專用版)</title>
+    
+    <!-- 1. 引入樣式與核心庫 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+
     <style>
-        /* ---------------------------------- */
-        /* CSS: 響應式極簡風格 (V2.7 Admin Tools) */
-        /* ---------------------------------- */
-        :root {
-            --bg-dark: #121212;
-            --bg-card: #1e1e1e;
-            --text-main: #ffffff;
-            --text-sub: #b0b0b0;
-            
-            --primary: #2196f3; 
-            --accent: #00bcd4;  
-            --success: #4caf50; 
-            --warning: #ff9800; 
-            --danger: #f44336;  
-            
-            --nav-height: 60px;
+        /* 基礎樣式與列印設定 */
+        body { background-color: #f3f4f6; color: #1f2937; font-family: system-ui, -apple-system, sans-serif; }
+        @media print {
+            @page { size: A4; margin: 5mm; }
+            body { background-color: white; -webkit-print-color-adjust: exact; }
+            .print-hidden { display: none !important; }
+            .print-block { display: block !important; }
+            .print-grid-2 { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 0.5rem !important; }
+            .break-inside-avoid { break-inside: avoid; page-break-inside: avoid; }
+            .print-text-xs { font-size: 10px !important; line-height: 1.2 !important; }
+            .print-text-tiny { font-size: 9px !important; line-height: 1.1 !important; }
+            .print-text-base { font-size: 14px !important; }
+            ::-webkit-scrollbar { display: none; }
         }
-
-        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            margin: 0; padding: 0;
-            background-color: var(--bg-dark);
-            color: var(--text-main);
-            height: 100vh;
-            display: flex; flex-direction: column;
-            overflow: hidden;
-        }
-
-        /* --- 頂部導航 --- */
-        .nav-bar {
-            height: var(--nav-height);
-            background-color: #000000;
-            display: flex; align-items: center; justify-content: space-between;
-            padding: 0 15px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.5);
-            z-index: 1000;
-        }
-        .nav-brand { font-size: 1.2rem; font-weight: bold; color: var(--accent); letter-spacing: 1px; }
-        .nav-btn {
-            background: #333; border: none; color: white;
-            width: 40px; height: 40px; border-radius: 50%;
-            display: flex; align-items: center; justify-content: center;
-            cursor: pointer; transition: background 0.2s;
-        }
-        .nav-btn:active { background: #555; }
-        .nav-btn svg { width: 24px; height: 24px; fill: currentColor; }
-
-        /* --- 主容器 --- */
-        .container {
-            flex: 1;
-            overflow-y: auto;
-            padding: 15px;
-            padding-bottom: 20px;
-            max-width: 800px;
-            margin: 0 auto;
-            width: 100%;
-        }
-
-        .screen { display: none; animation: fadeIn 0.3s ease; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-
-        .card {
-            background-color: var(--bg-card);
-            border-radius: 12px; padding: 15px; margin-bottom: 15px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.2); border: 1px solid #333;
-        }
-
-        /* --- 登入 --- */
-        .login-box {
-            display: flex; flex-direction: column; align-items: center; justify-content: center; height: 80vh;
-        }
-        .pin-dots {
-            font-size: 3rem; letter-spacing: 10px; color: var(--accent);
-            margin: 20px 0; min-height: 60px;
-        }
-
-        /* --- 列表 --- */
-        .section-title {
-            font-size: 1rem; color: var(--text-sub); margin: 10px 0 5px 5px; text-transform: uppercase; letter-spacing: 1px;
-        }
-        
-        .active-job-card {
-            background: linear-gradient(135deg, #1b5e20 0%, #0d3310 100%);
-            border: 2px solid var(--success);
-            animation: pulse-border 2s infinite;
-        }
-        @keyframes pulse-border { 0% { border-color: #4caf50; } 50% { border-color: #81c784; } 100% { border-color: #4caf50; } }
-
-        .job-item {
-            display: flex; align-items: center;
-            padding: 15px; background-color: var(--bg-card); border-radius: 8px;
-            margin-bottom: 10px; border-left: 5px solid var(--primary);
-            cursor: pointer; transition: transform 0.1s;
-        }
-        .job-item:active { transform: scale(0.98); background-color: #2a2a2a; }
-        
-        .job-left { flex: 0 0 50px; font-size: 1.4rem; font-weight: bold; color: var(--text-sub); text-align: center; }
-        .job-main { flex: 1; padding: 0 15px; }
-        .job-title { font-size: 1.2rem; font-weight: bold; color: #fff; margin-bottom: 4px; }
-        .job-sub { font-size: 0.9rem; color: #aaa; }
-        .job-meta { font-size: 0.8rem; color: #666; margin-top: 4px; }
-        .job-status { font-size: 1.5rem; }
-
-        /* --- 計時 --- */
-        .timer-display {
-            font-size: 4.5rem; font-weight: bold; color: var(--accent);
-            text-align: center; margin: 20px 0; font-variant-numeric: tabular-nums;
-            text-shadow: 0 0 20px rgba(0, 188, 212, 0.3);
-        }
-        .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
-        .info-box { background: #252525; padding: 15px; border-radius: 8px; text-align: center; }
-        .info-label { font-size: 0.8rem; color: #888; margin-bottom: 5px; }
-        .info-value { font-size: 1.4rem; font-weight: bold; color: #fff; }
-
-        /* --- 鍵盤 --- */
-        .keypad {
-            display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
-            max-width: 400px; margin: 0 auto;
-        }
-        .key-btn {
-            background-color: #333; color: white;
-            font-size: 1.6rem; font-weight: bold;
-            padding: 20px 0; border-radius: 8px; border: none;
-            box-shadow: 0 4px 0 #111; cursor: pointer;
-        }
-        .key-btn:active { transform: translateY(4px); box-shadow: 0 0 0 #111; }
-        .key-confirm { background-color: var(--success); color: black; box-shadow: 0 4px 0 #2e7d32; }
-        .key-clear { background-color: var(--danger); color: white; box-shadow: 0 4px 0 #c62828; }
-
-        /* --- 操作列 --- */
-        .bottom-actions {
-            margin-top: auto; display: grid; grid-template-columns: 1fr 2fr; gap: 10px; padding-top: 20px;
-        }
-        .action-btn {
-            padding: 15px; font-size: 1.2rem; font-weight: bold; border: none; border-radius: 8px; color: white; cursor: pointer;
-            display: flex; align-items: center; justify-content: center; gap: 8px;
-        }
-        .btn-secondary { background-color: #424242; }
-        .btn-primary { background-color: var(--warning); color: black; }
-        .btn-blue { background-color: var(--primary); }
-
-        /* --- 輸入/確認 --- */
-        .input-instruction {
-            font-size: 1.5rem; text-align: center; margin-bottom: 20px; color: var(--accent); font-weight: bold;
-        }
-        .input-value-display {
-            background: #000; color: var(--success); font-size: 3rem; text-align: center;
-            padding: 10px; border: 2px solid #333; border-radius: 8px; margin-bottom: 20px;
-        }
-        .summary-list {
-            text-align: left; background: #222; padding: 15px; border-radius: 8px; margin-bottom: 20px;
-        }
-        .summary-item { display: flex; justify-content: space-between; border-bottom: 1px solid #444; padding: 10px 0; }
-        .summary-item:last-child { border-bottom: none; }
-
-        /* --- 生管 --- */
-        .admin-header { display: flex; gap: 10px; overflow-x: auto; margin-bottom: 15px; padding-bottom: 5px; }
-        .admin-tab { 
-            background: transparent; color: #888; border: 1px solid #555; padding: 8px 16px; border-radius: 20px; white-space: nowrap; cursor: pointer;
-        }
-        .admin-tab.active { background: var(--primary); color: black; border-color: var(--primary); font-weight: bold; }
-        
-        /* 生管輸入列 */
-        .admin-input { width: 100%; padding: 10px; margin: 5px 0 10px 0; background: #000; border: 1px solid #555; color: white; font-size: 1rem; border-radius: 4px;}
-        
-        /* 範本選擇區 */
-        .template-control {
-            display: flex; gap: 10px; align-items: center; margin-bottom: 15px; background: #333; padding: 10px; border-radius: 8px;
-        }
-        .template-select {
-            flex-grow: 1; padding: 10px; background: #222; color: white; border: 1px solid #555; border-radius: 4px; font-size: 1rem;
-        }
-        .btn-icon-small {
-            background: var(--danger); border: none; color: white; width: 40px; height: 40px; border-radius: 4px; cursor: pointer; font-size: 1.2rem;
-        }
-
-        /* 工單明細列 */
-        .sub-item-row {
-            display: grid; grid-template-columns: 1fr 1fr 40px; gap: 5px; margin-bottom: 5px; align-items: center;
-        }
-        .btn-row-delete {
-            background: #444; border: 1px solid #666; color: #ccc; width: 100%; height: 100%; cursor: pointer; border-radius: 4px;
-        }
-
-        /* Loading */
-        #loading-mask {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.85); z-index: 2000;
-            display: none; flex-direction: column; align-items: center; justify-content: center;
-        }
-        .loader {
-            width: 50px; height: 50px; border: 5px solid #333; border-top-color: var(--accent); border-radius: 50%;
-            animation: spin 0.8s linear infinite;
-        }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        
-        .sync-status { font-size: 0.7rem; margin-left: 10px; color: #aaa; }
-
-        @media (min-width: 768px) {
-            .keypad { max-width: 500px; gap: 15px; }
-            .key-btn { font-size: 2rem; padding: 25px 0; }
-            .job-item { padding: 20px; }
-            .job-title { font-size: 1.5rem; }
-        }
+        .animate-fade-in { animation: fadeIn 0.3s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        .dashed-border { background-image: url("data:image/svg+xml,%3csvg width='100%25' height='100%25' xmlns='http://www.w3.org/2000/svg'%3e%3crect width='100%25' height='100%25' fill='none' rx='16' ry='16' stroke='%233B82F6FF' stroke-width='4' stroke-dasharray='12%2c 12' stroke-dashoffset='0' stroke-linecap='square'/%3e%3c/svg%3e"); }
     </style>
+
+    <!-- 2. 全域錯誤攔截 -->
+    <script>
+        window.onerror = function(msg, url, line, col, error) {
+            document.getElementById('loading-screen').style.display = 'none';
+            const errorBox = document.getElementById('error-display');
+            errorBox.style.display = 'block';
+            errorBox.innerHTML = `
+                <h2 style="font-weight:bold; font-size:1.2em; margin-bottom:10px;">⚠️ 系統發生錯誤</h2>
+                <p><strong>錯誤訊息：</strong> ${msg}</p>
+                <button onclick="resetApp()" style="margin-top:15px; padding:8px 16px; background:#dc2626; color:white; border:none; border-radius:4px; cursor:pointer;">清除資料並修復</button>
+            `;
+            return false;
+        };
+        function resetApp() {
+            localStorage.removeItem('payroll_employees');
+            localStorage.removeItem('payroll_data');
+            alert('已清除暫存資料，系統將重新整理。');
+            window.location.reload();
+        }
+    </script>
 </head>
 <body>
 
-    <div class="nav-bar">
-        <button class="nav-btn" onclick="handleNavBack()" id="nav-back-btn" style="visibility: hidden;">
-            <svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
-        </button>
-        <div class="nav-brand">MES Lite <span class="sync-status" id="sync-status"></span></div>
-        <button class="nav-btn" onclick="logout()" id="nav-logout-btn" style="visibility: hidden;">
-            <svg viewBox="0 0 24 24"><path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/></svg>
-        </button>
+    <div id="loading-screen">
+        <div style="width: 40px; height: 40px; border: 4px solid #e5e7eb; border-top-color: #3b82f6; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+        <p style="margin-top: 15px; color: #6b7280;">系統載入中...</p>
+        <button onclick="resetApp()" style="margin-top: 20px; font-size: 12px; color: #ef4444; text-decoration: underline; background: none; border: none; cursor: pointer;">若卡住太久，請點此重置</button>
+        <style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>
     </div>
 
-    <div class="container">
-        
-        <!-- 1. 登入 -->
-        <div id="screen-login" class="screen">
-            <div class="login-box">
-                <div style="margin-bottom: 20px; color: var(--text-sub);">請輸入識別碼 / ENTER PIN</div>
-                <div id="pin-display" class="pin-dots">_ _ _ _</div>
-                <div id="login-msg" style="color: var(--danger); height: 20px; margin-bottom: 10px;"></div>
-                <div class="keypad" id="login-keypad"></div>
-                <div style="margin-top: 30px; font-size: 0.8rem; color: #444;">
-                    V2.7 Template Mgr
-                </div>
-            </div>
-        </div>
+    <div id="error-display"></div>
+    <div id="root"></div>
 
-        <!-- 2. 待辦排程 -->
-        <div id="screen-queue" class="screen">
-            <div class="user-welcome" style="margin-bottom: 15px; color: var(--accent); font-weight: bold;">
-                👋 <span id="user-name-display">User</span>
-            </div>
-            
-            <div id="active-jobs-section" style="display: none;">
-                <div class="section-title">🔥 進行中 (RUNNING)</div>
-                <div id="active-jobs-list"></div>
-            </div>
+    <script type="text/babel">
+        setTimeout(() => { const loader = document.getElementById('loading-screen'); if(loader) loader.style.display = 'none'; }, 800);
 
-            <div class="section-title" style="display: flex; justify-content: space-between; align-items: center;">
-                <span>📋 待辦清單 (QUEUE)</span>
-                <button onclick="syncQueue()" style="background:none; border:1px solid #555; color:#888; border-radius:4px; padding:5px 10px; font-size:0.8rem;">☁️ 同步</button>
-            </div>
-            
-            <select id="queue-filter" onchange="renderQueue()" style="width: 100%; padding: 12px; background: #222; color: white; border: 1px solid #444; border-radius: 8px; margin-bottom: 10px; font-size: 1rem;">
-                <option value="ALL">全部顯示 (Show All)</option>
-            </select>
+        const { useState, useMemo, useEffect, useRef } = React;
 
-            <div id="queue-list"></div>
-        </div>
-
-        <!-- 3. 人數輸入 -->
-        <div id="screen-manpower" class="screen">
-            <div class="input-instruction">
-                <div>👥 本次投入人數?</div>
-                <div style="font-size: 1rem; color: #888;">How many workers?</div>
-            </div>
-            <div id="manpower-display" class="input-value-display">0</div>
-            <div class="keypad" id="manpower-keypad"></div>
-        </div>
-
-        <!-- 4. 計時畫面 -->
-        <div id="screen-working" class="screen" style="display: flex; flex-direction: column;">
-            <div class="card active-job-card" style="text-align: center;">
-                <div style="font-size: 0.9rem; color: #cfd8dc; margin-bottom: 5px;">正在執行 (Running)</div>
-                <div id="working-prod" style="font-size: 1.5rem; font-weight: bold;">產品名稱</div>
-                <div id="working-op" style="font-size: 1.1rem; color: #a5d6a7;">工序名稱</div>
-            </div>
-
-            <div class="timer-display" id="working-timer">00:00:00</div>
-
-            <div class="info-grid">
-                <div class="info-box">
-                    <div class="info-label">工單號</div>
-                    <div class="info-value" id="working-woid" style="font-size: 1rem;">-</div>
-                </div>
-                <div class="info-box">
-                    <div class="info-label">目前人數</div>
-                    <div class="info-value" id="working-manpower">-</div>
-                </div>
-            </div>
-
-            <div class="bottom-actions">
-                <button class="action-btn btn-secondary" onclick="backToQueue()">
-                    <span>⬅ 暫離 (Back)</span>
-                </button>
-                <button class="action-btn btn-primary" onclick="endJob()">
-                    <span>🏁 完成 (Finish)</span>
-                </button>
-            </div>
-            
-            <button onclick="adjustManpower()" style="width: 100%; background: none; border: 1px dashed #555; color: #888; padding: 10px; margin-top: 15px; border-radius: 8px;">
-                👥 調整人數 (Change Manpower)
-            </button>
-        </div>
-
-        <!-- 5. 數量輸入/確認 -->
-        <div id="screen-finish" class="screen">
-            <div class="input-instruction" id="finish-instruction"></div>
-            <div id="qty-display" class="input-value-display">0</div>
-            <div id="finish-summary" class="summary-list" style="display: none;"></div>
-            <div class="keypad" id="finish-keypad"></div>
-        </div>
-
-        <!-- 6. 生管後台 (Admin) -->
-        <div id="screen-admin" class="screen">
-            <h2>🛠️ 生管控制台</h2>
-            <div class="admin-header">
-                <button class="admin-tab active" onclick="showAdminTab('create')">建立工單</button>
-                <button class="admin-tab" onclick="showAdminTab('history')">匯出報表</button>
-            </div>
-
-            <!-- 建立工單 Tab -->
-            <div id="admin-tab-create">
-                <div class="card">
-                    <!-- 範本管理區 -->
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
-                        <label style="color:#aaa; font-size:0.8rem;">📂 範本 (Templates)</label>
-                    </div>
-                    <div class="template-control">
-                        <select id="admin-template" class="template-select" onchange="loadTemplate()">
-                            <option value="">-- 選擇載入 --</option>
-                        </select>
-                        <button class="btn-icon-small" onclick="deleteTemplate()" title="刪除此範本">🗑️</button>
-                    </div>
-
-                    <hr style="border: 0; border-top: 1px solid #333; margin: 15px 0;">
-
-                    <label style="color:#aaa; font-size:0.8rem;">總工單 ID (Master WO)</label>
-                    <input type="text" id="admin-mwo" placeholder="MWO-2025..." class="admin-input">
-                    
-                    <label style="color:#aaa; font-size:0.8rem;">工序明細</label>
-                    <div id="admin-sub-items">
-                        <!-- JS 動態生成輸入框 -->
-                    </div>
-                    
-                    <button onclick="addAdminRow()" style="width:100%; padding:10px; background:#444; border:1px dashed #666; color:#ccc; margin-top:10px;">+ 新增項目</button>
-                </div>
-                
-                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-top:15px;">
-                    <button class="action-btn btn-secondary" onclick="saveTemplate()">💾 儲存範本</button>
-                    <button class="action-btn btn-blue" onclick="publishWorkOrders()">🚀 發布工單</button>
-                </div>
-                <button onclick="resetData()" style="width:100%; margin-top:20px; padding:10px; background:#300; color:#f88; border:none; border-radius:4px;">⚠️ 重置系統資料</button>
-            </div>
-
-            <!-- 匯出報表 Tab -->
-            <div id="admin-tab-history" style="display:none;">
-                <div id="history-list" style="font-size:0.8rem;"></div>
-                 <div style="text-align:center; padding:20px; color:#aaa;">
-                     請直接至 Google Sheets 查看完整報表
-                 </div>
-            </div>
-        </div>
-
-    </div>
-
-    <!-- Loading Mask -->
-    <div id="loading-mask">
-        <div class="loader"></div>
-        <div style="color: white; margin-top: 15px; font-size: 1.2rem;">雲端同步中...</div>
-    </div>
-
-    <script>
-        // ================= CONFIG =================
-        // 🚨 請務必替換為您的 GAS Webhook URL
-        const GAS_URL = "https://script.google.com/macros/s/AKfycbyP9sYjwQ3pM7MMkrbiWTaUKmIeUcWhtWzPEqyhBlpHds7NfK6I49TTbEg4DWGsutBytA/exec";
-        const SECURITY_TOKEN = "MES_LITE_2025";
-        
-        // ================= STATE =================
-        let appData = {
-            queue: [],          
-            activeJobs: {},     
-            templates: []       
+        // --- 圖示組件 ---
+        const Icon = ({ path, className }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{path}</svg>
+        );
+        const Icons = {
+            Calculator: (props) => <Icon {...props} path={<><rect width="16" height="20" x="4" y="2" rx="2"/><line x1="8" x2="16" y1="6" y2="6"/><line x1="16" x2="16" y1="14" y2="18"/><path d="M16 10h.01"/><path d="M12 10h.01"/><path d="M8 10h.01"/><path d="M12 14h.01"/><path d="M8 14h.01"/><path d="M12 18h.01"/><path d="M8 18h.01"/></>} />,
+            Users: (props) => <Icon {...props} path={<><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></>} />,
+            Printer: (props) => <Icon {...props} path={<><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/></>} />,
+            Plus: (props) => <Icon {...props} path={<><path d="M5 12h14"/><path d="M12 5v14"/></>} />,
+            Trash2: (props) => <Icon {...props} path={<><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></>} />,
+            Settings: (props) => <Icon {...props} path={<><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.09a2 2 0 0 1-1-1.74v-.47a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.39a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></>} />,
+            Upload: (props) => <Icon {...props} path={<><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></>} />,
+            Clock: (props) => <Icon {...props} path={<><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></>} />,
+            HelpCircle: (props) => <Icon {...props} path={<><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></>} />,
+            FileSpreadsheet: (props) => <Icon {...props} path={<><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><path d="M8 13h2"/><path d="M8 17h2"/><path d="M14 13h2"/><path d="M14 17h2"/></>} />,
+            RefreshCw: (props) => <Icon {...props} path={<><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></>} />,
+            Edit: (props) => <Icon {...props} path={<><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></>} />
         };
 
-        let uiState = {
-            screen: 'login', pin: '', user: null, lang: 'zh',
-            targetWoId: null, tempManpower: 0, tempQty: '',
-            finishStep: 0, finishCache: {}
-        };
-        
-        let timerInterval = null;
-        const DEMO_QUEUE = [
-            { wo_id: 'DEMO-1', master: 'SAMPLE', prod_zh: '測試品A', prod_vn: 'Test A', op_zh: '包裝', op_vn: 'Packing', rank: 1 },
+        const INITIAL_EMPLOYEES = [
+            { id: 1, name: '範例-張耀升', empId: 'W0001', baseSalary: 28590, laborFee: 1100, healthFee: 750, title: '作業員', lastRaiseDate: '2024-01-01' },
+            { id: 2, name: '範例-李小美', empId: 'W0002', baseSalary: 42000, laborFee: 1200, healthFee: 800, title: '行政主管', lastRaiseDate: '2023-07-01' },
         ];
 
-        const I18N = {
-            zh: { welcome: '你好', running: '進行中', waiting: '待辦', finish: '完成', back: '暫離', confirm: '確認送出', step_reject: '❌ 輸入損耗 (KG)', step_collar: '下巴重量 (KG)', step_tail: '尾段重量 (KG)', step_total: '✅ 良品/總重 (KG)', summary: '📋 請確認資料' },
-            vn: { welcome: 'Xin chào', running: 'Đang chạy', waiting: 'Chờ', finish: 'Hoàn tất', back: 'Quay lại', confirm: 'Xác nhận', step_reject: '❌ Hỏng (KG)', step_collar: 'Cằm (KG)', step_tail: 'Đuôi (KG)', step_total: '✅ Tổng (KG)', summary: '📋 Xác nhận' }
+        const INITIAL_PAYROLL_DATA = [
+            { 
+                empId: 1, period: '2025-11', 
+                wt034: "10:30", wt067: "00:00", // 10小時30分
+                hd134: "00:00", hd167: "00:00",  
+                earlyShift: "00:00", noLunch: "00:00", holidayOT: "00:00", 
+                sickLeave: "00:00", personalLeave: "00:00", annualLeave: "00:00", bereavementLeave: "00:00",
+                lunchAllowance: 0, businessBonus: 0, 
+                deduction: 0, 
+                expectedWorkDays: 20, actualWorkHours: "160:30",
+                note: '' 
+            },
+        ];
+
+        const PayrollApp = () => {
+            const [activeTab, setActiveTab] = useState('employees');
+            const [employees, setEmployees] = useState(() => {
+                try { return JSON.parse(localStorage.getItem('payroll_employees')) || INITIAL_EMPLOYEES; } catch(e) { return INITIAL_EMPLOYEES; }
+            });
+            const [payrollData, setPayrollData] = useState(() => {
+                try { return JSON.parse(localStorage.getItem('payroll_data')) || INITIAL_PAYROLL_DATA; } catch(e) { return INITIAL_PAYROLL_DATA; }
+            });
+            
+            const [currentPeriod, setCurrentPeriod] = useState(new Date().toISOString().slice(0, 7));
+            const [editingEmp, setEditingEmp] = useState(null);
+            const [isEmpModalOpen, setIsEmpModalOpen] = useState(false);
+            const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+            const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
+            
+            const [bulkTargetSalary, setBulkTargetSalary] = useState(29500);
+            const [bulkFilterType, setBulkFilterType] = useState('salary');
+            const [bulkFilterValue, setBulkFilterValue] = useState(28590);
+
+            const fileInputRef = useRef(null);
+
+            useEffect(() => { localStorage.setItem('payroll_employees', JSON.stringify(employees)); }, [employees]);
+            useEffect(() => { localStorage.setItem('payroll_data', JSON.stringify(payrollData)); }, [payrollData]);
+
+            // --- 輔助：時間轉換與格式化 ---
+            // 確保輸入值為 HH:MM 格式，如果使用者輸入 "1030" 轉 "10:30", "1.5" 轉 "01:30"
+            const formatInputTime = (val) => {
+                if(!val) return "00:00";
+                val = String(val).trim();
+                
+                // 處理小數點 (e.g., 1.5 -> 01:30)
+                if (val.includes('.')) {
+                    const num = parseFloat(val);
+                    const h = Math.floor(num);
+                    const m = Math.round((num - h) * 60);
+                    return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+                }
+                
+                // 處理無冒號 (e.g., 1030 -> 10:30, 8 -> 08:00)
+                if (!val.includes(':')) {
+                    if (val.length <= 2) return `${val.padStart(2,'0')}:00`;
+                    if (val.length === 3) return `0${val[0]}:${val.substring(1)}`;
+                    if (val.length === 4) return `${val.substring(0,2)}:${val.substring(2)}`;
+                }
+                
+                // 標準化 (e.g., 8:5 -> 08:05)
+                const parts = val.split(':');
+                const h = String(parseInt(parts[0])||0).padStart(2,'0');
+                const m = String(parseInt(parts[1])||0).padStart(2,'0');
+                return `${h}:${m}`;
+            };
+
+            // "HH:MM" 轉 小時數 (計算用)
+            const timeStrToHours = (str) => {
+                if (!str) return 0;
+                const [h, m] = str.toString().split(':').map(Number);
+                return (h || 0) + (m || 0) / 60;
+            };
+
+            // 小時數 轉 "HH:MM" (顯示用)
+            const hoursToTimeStr = (hours) => {
+                if (!hours && hours !== 0) return "00:00";
+                const h = Math.floor(Math.abs(hours)); // 處理負數顯示需小心，這裡先取絕對值
+                const m = Math.round((Math.abs(hours) - h) * 60);
+                const sign = hours < 0 ? "-" : "";
+                return `${sign}${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+            };
+
+            // --- V13 核心薪資計算 ---
+            const calculateSalary = (emp, data) => {
+                if (!emp) return null;
+                const d = data || {};
+                
+                const hourlyRate = Math.round(emp.baseSalary / 240);
+                
+                // 加項計算 (時數 -> 金額)
+                const payWt034 = Math.round(timeStrToHours(d.wt034) * 0.34 * hourlyRate);
+                const payWt067 = Math.round(timeStrToHours(d.wt067) * 0.67 * hourlyRate);
+                const payHd134 = Math.round(timeStrToHours(d.hd134) * 1.34 * hourlyRate);
+                const payHd167 = Math.round(timeStrToHours(d.hd167) * 1.67 * hourlyRate);
+                const payEarly = Math.round(timeStrToHours(d.earlyShift) * 0.34 * hourlyRate);
+                const payNoLunch = Math.round(timeStrToHours(d.noLunch) * 0.34 * hourlyRate);
+                const payHolidayOT = Math.round(timeStrToHours(d.holidayOT) * 1.34 * hourlyRate);
+                const payAnnual = Math.round(timeStrToHours(d.annualLeave) * 1.0 * hourlyRate); 
+
+                const allowances = (parseInt(d.lunchAllowance) || 0) + (parseInt(d.businessBonus) || 0);
+
+                const totalAdditions = payWt034 + payWt067 + payHd134 + payHd167 + payEarly + payNoLunch + payHolidayOT + payAnnual + allowances;
+                const grossPay = emp.baseSalary + totalAdditions;
+
+                // 扣項計算
+                const dedSick = Math.round(timeStrToHours(d.sickLeave) * 0.5 * hourlyRate);
+                const dedPersonal = Math.round(timeStrToHours(d.personalLeave) * 1.0 * hourlyRate);
+                
+                // 缺勤扣款
+                const expectedHours = (d.expectedWorkDays || 0) * 8; // 應上班時數
+                const actualHoursVal = timeStrToHours(d.actualWorkHours); // 實上班時數
+                let absenceHoursVal = 0;
+                let dedAbsence = 0;
+
+                if (expectedHours > 0 && actualHoursVal < expectedHours) {
+                    absenceHoursVal = expectedHours - actualHoursVal;
+                    dedAbsence = Math.round(absenceHoursVal * hourlyRate);
+                }
+
+                let insuranceFee = 0;
+                let finalDeduction = 0;
+
+                if (d.hasImportedInsurance) {
+                    insuranceFee = parseInt(d.deduction) || 0;
+                    finalDeduction = dedSick + dedPersonal + dedAbsence + insuranceFee; 
+                } else {
+                    insuranceFee = emp.laborFee + emp.healthFee;
+                    finalDeduction = dedSick + dedPersonal + dedAbsence + insuranceFee + (parseInt(d.deduction) || 0);
+                }
+
+                const netPay = grossPay - finalDeduction;
+
+                return { 
+                    hourlyRate, 
+                    payWt034, payWt067, payHd134, payHd167, payEarly, payNoLunch, payHolidayOT, payAnnual,
+                    dedSick, dedPersonal, dedAbsence, 
+                    absenceHoursStr: hoursToTimeStr(absenceHoursVal), 
+                    expectedHours,
+                    totalAdditions, finalDeduction, netPay, insuranceFee, grossPay
+                };
+            };
+
+            const fullPayrollList = useMemo(() => {
+                return employees.map(emp => {
+                    let data = payrollData.find(d => d.empId === emp.id && d.period === currentPeriod);
+                    if (!data) data = { empId: emp.id, period: currentPeriod };
+                    
+                    const safeData = {
+                        wt034: data.wt034 || "00:00", wt067: data.wt067 || "00:00",
+                        hd134: data.hd134 || "00:00", hd167: data.hd167 || "00:00",
+                        earlyShift: data.earlyShift || "00:00", noLunch: data.noLunch || "00:00", holidayOT: data.holidayOT || "00:00",
+                        sickLeave: data.sickLeave || "00:00", personalLeave: data.personalLeave || "00:00", 
+                        annualLeave: data.annualLeave || "00:00", bereavementLeave: data.bereavementLeave || "00:00",
+                        lunchAllowance: data.lunchAllowance || 0, businessBonus: data.businessBonus || 0,
+                        deduction: data.deduction || 0, note: data.note || '', 
+                        hasImportedInsurance: data.hasImportedInsurance,
+                        expectedWorkDays: data.expectedWorkDays || 0,
+                        actualWorkHours: data.actualWorkHours || "00:00"
+                    };
+                    return { ...emp, ...safeData, ...calculateSalary(emp, safeData) };
+                });
+            }, [employees, payrollData, currentPeriod]);
+
+            const hasDataForCurrentMonth = useMemo(() => fullPayrollList.some(i => i.grossPay > i.baseSalary || i.note), [fullPayrollList]);
+
+            const updateVal = (empId, field, value) => {
+                setPayrollData(prev => {
+                    const idx = prev.findIndex(p => p.empId === empId && p.period === currentPeriod);
+                    // 時間欄位保持字串，金額欄位轉數字
+                    const isTimeField = ['wt034','wt067','hd134','hd167','earlyShift','noLunch','holidayOT','sickLeave','personalLeave','annualLeave','actualWorkHours'].includes(field);
+                    const val = isTimeField ? value : (field === 'note' || field === 'period') ? value : Number(value);
+                    
+                    let newData = [...prev];
+                    if (idx >= 0) {
+                        newData[idx] = { ...newData[idx], [field]: val };
+                        if (field === 'deduction') newData[idx].hasImportedInsurance = false; 
+                    } else {
+                        newData.push({ empId, period: currentPeriod, [field]: val });
+                    }
+                    return newData;
+                });
+            };
+
+            // 處理時間欄位 Blur 事件 (自動格式化)
+            const handleTimeBlur = (empId, field, value) => {
+                const formatted = formatInputTime(value);
+                updateVal(empId, field, formatted);
+            };
+
+            // Excel Parsing V13
+            const excelTimeToString = (val) => {
+                if (typeof val === 'string') return formatInputTime(val); 
+                if (typeof val === 'number') {
+                    const totalHours = val * 24;
+                    const h = Math.floor(totalHours);
+                    const m = Math.round((totalHours - h) * 60);
+                    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+                }
+                return "00:00";
+            };
+
+            const parseLeave = (note) => {
+                let sick=0, personal=0, annual=0, bereavement=0;
+                if (!note) return { sick: "00:00", personal: "00:00", annual: "00:00", bereavement: "00:00" };
+                const str = note.toString();
+                
+                const parseMatch = (regex) => {
+                    const match = str.match(regex);
+                    if (match) {
+                        const h = parseInt(match[2]) || 0;
+                        const m = parseInt(match[4]) || 0;
+                        return h + m/60;
+                    }
+                    return 0;
+                };
+
+                sick = parseMatch(/(病假)\s*(\d+)([:\.](\d+))?/);
+                personal = parseMatch(/(事假|曠職|扣薪|颱風)\s*(\d+)([:\.](\d+))?/);
+                annual = parseMatch(/(特休|年假)\s*(\d+)([:\.](\d+))?/);
+                bereavement = parseMatch(/(喪假)\s*(\d+)([:\.](\d+))?/);
+
+                return { 
+                    sick: hoursToTimeStr(sick), 
+                    personal: hoursToTimeStr(personal), 
+                    annual: hoursToTimeStr(annual), 
+                    bereavement: hoursToTimeStr(bereavement) 
+                };
+            };
+
+            const handleExcel = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (evt) => {
+                    try {
+                        const wb = XLSX.read(evt.target.result, { type: 'binary' });
+                        const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: "" });
+                        
+                        let hRow = -1;
+                        for(let i=0; i<Math.min(data.length, 20); i++) {
+                            if(JSON.stringify(data[i]).includes("員工編號")) { hRow = i; break; }
+                        }
+                        if(hRow === -1) throw new Error("找不到標題列");
+
+                        const headers = data[hRow];
+                        const rows = data.slice(hRow+1);
+                        
+                        const idx = { id:-1, name:-1, wt034:[], wt067:[], hd134:[], hd167:[], early:-1, noLunch:-1, holidayOT:-1, lunch:-1, bonus:-1, ins:-1, note:-1, expDays:-1, actHours:-1, annual:-1 };
+                        let satIdx = headers.findIndex(h => String(h).includes("星期六") || String(h).includes("假日"));
+                        
+                        headers.forEach((h, i) => {
+                            const t = String(h).trim();
+                            if(t.includes("員工編號")) idx.id = i;
+                            else if(t.includes("員工姓名")) idx.name = i;
+                            else if(t.includes("1.33") || t.includes("1.34")) {
+                                if(satIdx > -1 && i > satIdx) idx.hd134.push(i); else idx.wt034.push(i);
+                            }
+                            else if(t.includes("1.66") || t.includes("1.67")) {
+                                if(satIdx > -1 && i > satIdx) idx.hd167.push(i); else idx.wt067.push(i);
+                            }
+                            else if(t.includes("提前")) idx.early = i;
+                            else if(t.includes("中午")) idx.noLunch = i;
+                            else if(t.includes("星期日")) idx.holidayOT = i;
+                            else if(t.includes("午餐") || t.includes("補助")) idx.lunch = i;
+                            else if(t.includes("業務") || t.includes("職務") || t.includes("加給")) idx.bonus = i;
+                            else if(t.includes("勞健保")) idx.ins = i;
+                            else if(t.includes("備註")) idx.note = i;
+                            else if(t.includes("應上班") || t.includes("應出勤")) {
+                                if(t.includes("次數") || t.includes("天數")) idx.expDays = i;
+                            }
+                            else if(t.includes("實上班") || t.includes("實際出勤")) {
+                                if(t.includes("時數")) idx.actHours = i;
+                            }
+                            else if(t.includes("特休") && !t.includes("備註")) idx.annual = i; 
+                        });
+                        if(idx.note === -1) idx.note = headers.length -1;
+
+                        let count = 0;
+                        const newPayroll = [...payrollData];
+                        const newEmps = [...employees];
+
+                        // 輔助：加總多個欄位的時間字串
+                        const sumTimeStrs = (row, indices) => {
+                            let totalH = 0;
+                            indices.forEach(i => {
+                                const val = row[i];
+                                if(typeof val === 'number') totalH += val * 24; 
+                                else if(typeof val === 'string' && val.includes(':')) {
+                                    const [h,m] = val.split(':').map(Number);
+                                    totalH += h + m/60;
+                                }
+                            });
+                            return hoursToTimeStr(totalH);
+                        };
+
+                        rows.forEach(row => {
+                            const eid = String(row[idx.id]||"").trim();
+                            const ename = String(row[idx.name]||"").trim();
+                            if(!eid) return;
+
+                            let emp = newEmps.find(e => e.empId === eid);
+                            if(!emp && ename) {
+                                emp = { id: Date.now()+Math.random(), empId: eid, name: ename, baseSalary: 28590, laborFee:0, healthFee:0, title:"員工", lastRaiseDate: new Date().toISOString().split('T')[0] };
+                                newEmps.push(emp);
+                            }
+
+                            if(emp) {
+                                const noteText = String(row[idx.note]||"");
+                                const leaves = parseLeave(noteText);
+
+                                let expDays = parseInt(row[idx.expDays]) || 0;
+                                
+                                let annualH = "00:00";
+                                if (idx.annual !== -1 && row[idx.annual]) {
+                                    annualH = excelTimeToString(row[idx.annual]);
+                                } else {
+                                    annualH = leaves.annual;
+                                }
+
+                                const entry = {
+                                    empId: emp.id, period: currentPeriod,
+                                    wt034: sumTimeStrs(row, idx.wt034),
+                                    wt067: sumTimeStrs(row, idx.wt067),
+                                    hd134: sumTimeStrs(row, idx.hd134),
+                                    hd167: sumTimeStrs(row, idx.hd167),
+                                    earlyShift: excelTimeToString(row[idx.early]),
+                                    noLunch: excelTimeToString(row[idx.noLunch]),
+                                    holidayOT: excelTimeToString(row[idx.holidayOT]),
+                                    lunchAllowance: parseInt(row[idx.lunch])||0,
+                                    businessBonus: parseInt(row[idx.bonus])||0,
+                                    deduction: parseInt(row[idx.ins])||0,
+                                    hasImportedInsurance: !!(parseInt(row[idx.ins])),
+                                    expectedWorkDays: expDays,
+                                    actualWorkHours: excelTimeToString(row[idx.actHours]),
+                                    sickLeave: leaves.sick,
+                                    personalLeave: leaves.personal,
+                                    annualLeave: annualH,
+                                    bereavementLeave: leaves.bereavement,
+                                    note: noteText
+                                };
+
+                                const existIdx = newPayroll.findIndex(p => p.empId === emp.id && p.period === currentPeriod);
+                                if(existIdx >= 0) newPayroll[existIdx] = { ...newPayroll[existIdx], ...entry };
+                                else newPayroll.push(entry);
+                                count++;
+                            }
+                        });
+                        setEmployees(newEmps);
+                        setPayrollData(newPayroll);
+                        setIsImportModalOpen(false);
+                        alert(`成功匯入 ${count} 筆資料！\n所有工時欄位已統一為「HH:MM」格式。`);
+
+                    } catch(err) { console.error(err); alert("匯入失敗: " + err.message); }
+                    if(fileInputRef.current) fileInputRef.current.value = '';
+                };
+                reader.readAsBinaryString(file);
+            };
+
+            // ... Employee CRUD & Bulk Logic ...
+            const handleSaveEmployee = (e) => {
+                e.preventDefault();
+                const fd = new FormData(e.target);
+                const newBaseSalary = Number(fd.get('baseSalary'));
+                const today = new Date().toISOString().split('T')[0];
+                let raiseDate = today; 
+                if (editingEmp && editingEmp.baseSalary === newBaseSalary) {
+                    raiseDate = editingEmp.lastRaiseDate || '';
+                }
+                const newEmp = {
+                    id: editingEmp ? editingEmp.id : Date.now(),
+                    name: fd.get('name'), empId: fd.get('empId'), title: fd.get('title'),
+                    baseSalary: newBaseSalary, laborFee: Number(fd.get('laborFee')), healthFee: Number(fd.get('healthFee')),
+                    lastRaiseDate: raiseDate
+                };
+                setEmployees(prev => editingEmp ? prev.map(e => e.id === editingEmp.id ? newEmp : e) : [...prev, newEmp]);
+                setIsEmpModalOpen(false);
+            };
+            const deleteEmployee = (id) => { if(confirm('刪除?')) setEmployees(prev => prev.filter(e => e.id !== id)); };
+            const clearAllData = () => { if(confirm('清空?')) { setEmployees([]); setPayrollData([]); } };
+            const handleBulkSubmit = (e) => {
+                e.preventDefault();
+                const target = Number(bulkTargetSalary);
+                if(!target) return;
+                const today = new Date().toISOString().split('T')[0];
+                let c = 0;
+                setEmployees(prev => prev.map(emp => {
+                    let ok = false;
+                    if(bulkFilterType==='all') ok=true;
+                    else if(bulkFilterType==='title' && emp.title.includes(String(bulkFilterValue))) ok=true;
+                    else if(bulkFilterType==='salary' && emp.baseSalary===Number(bulkFilterValue)) ok=true;
+                    if(ok) { c++; if (emp.baseSalary !== target) return {...emp, baseSalary: target, lastRaiseDate: today}; }
+                    return emp;
+                }));
+                setIsBulkModalOpen(false);
+                alert(`更新 ${c} 人`);
+            };
+
+            return (
+                <div className="min-h-screen pb-10">
+                    <nav className="bg-slate-800 text-white shadow-lg print-hidden sticky top-0 z-40">
+                        <div className="max-w-7xl mx-auto px-4 flex justify-between h-16 items-center">
+                            <div className="flex items-center space-x-2"><Icons.Calculator className="w-6 h-6 text-yellow-400"/><span className="font-bold text-xl">薪資管理系統 V13</span></div>
+                            <div className="flex space-x-2">
+                                <button onClick={()=>setActiveTab('employees')} className={`px-3 py-1 rounded ${activeTab==='employees'?'bg-yellow-500 text-black':'hover:bg-slate-700'}`}>設定</button>
+                                <button onClick={()=>setActiveTab('input')} className={`px-3 py-1 rounded ${activeTab==='input'?'bg-yellow-500 text-black':'hover:bg-slate-700'}`}>結算</button>
+                                <button onClick={()=>setActiveTab('print')} className={`px-3 py-1 rounded ${activeTab==='print'?'bg-yellow-500 text-black':'hover:bg-slate-700'}`}>列印</button>
+                            </div>
+                        </div>
+                    </nav>
+
+                    <main className="max-w-7xl mx-auto p-4 md:p-8 print-block print:p-0 print:max-w-none">
+                        
+                        {activeTab === 'employees' && (
+                            <div className="bg-white rounded-xl shadow p-6 animate-fade-in">
+                                <div className="flex justify-between mb-4">
+                                    <h2 className="text-xl font-bold flex items-center"><Icons.Users className="w-5 h-5 mr-2 text-blue-600"/> 員工資料</h2>
+                                    <div className="space-x-2">
+                                        <button onClick={()=>setIsBulkModalOpen(true)} className="px-3 py-1 bg-orange-100 text-orange-700 rounded border border-orange-200">批量調薪</button>
+                                        <button onClick={()=>setEditingEmp({}) || setIsEmpModalOpen(true)} className="px-3 py-1 bg-blue-600 text-white rounded">新增</button>
+                                    </div>
+                                </div>
+                                <div className="overflow-x-auto">
+                                    <table className="min-w-full text-sm">
+                                        <thead className="bg-slate-50 text-left"><tr><th className="p-2">編號</th><th className="p-2">姓名</th><th className="p-2">職位</th><th className="p-2">底薪</th><th className="p-2">上次調薪日</th><th className="p-2">勞健保</th><th className="p-2">操作</th></tr></thead>
+                                        <tbody>{employees.map(e => (
+                                            <tr key={e.id} className="border-b hover:bg-slate-50"><td className="p-2">{e.empId}</td><td className="p-2 font-bold">{e.name}</td><td className="p-2 text-slate-600">{e.title}</td><td className="p-2 text-blue-700 font-bold">${e.baseSalary}</td><td className="p-2 text-slate-500 text-xs">{e.lastRaiseDate || '-'}</td><td className="p-2 text-red-600">-{e.laborFee+e.healthFee}</td><td className="p-2"><button onClick={()=>{setEditingEmp(e);setIsEmpModalOpen(true)}} className="text-blue-600 mr-2">編輯</button><button onClick={()=>deleteEmployee(e.id)} className="text-red-600">刪除</button></td></tr>
+                                        ))}</tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'input' && (
+                            <div className="bg-white rounded-xl shadow p-6 animate-fade-in overflow-x-auto">
+                                <div className="flex justify-between mb-4">
+                                    <h2 className="text-xl font-bold flex items-center"><Icons.Clock className="w-5 h-5 mr-2 text-green-600"/> 薪資結算 (時:分)</h2>
+                                    <div className="flex space-x-2">
+                                        <input type="month" value={currentPeriod} onChange={e=>setCurrentPeriod(e.target.value)} className="border rounded px-2"/>
+                                        <button onClick={()=>setIsImportModalOpen(true)} className="px-3 py-1 bg-emerald-600 text-white rounded">匯入 Excel</button>
+                                    </div>
+                                </div>
+                                {!hasDataForCurrentMonth && employees.length > 0 && <div onClick={()=>setIsImportModalOpen(true)} className="p-8 dashed-border text-center bg-blue-50 text-blue-600 cursor-pointer mb-4">點此匯入本月總表</div>}
+                                <table className="min-w-full text-xs whitespace-nowrap">
+                                    <thead className="bg-slate-100">
+                                        <tr>
+                                            <th className="p-2 text-left sticky left-0 bg-slate-100">員工</th>
+                                            <th className="p-2 text-slate-600 font-bold">實工</th>
+                                            <th className="p-2 bg-blue-50 text-blue-700">平加<br/>0.34</th>
+                                            <th className="p-2 bg-blue-50 text-blue-700">平加<br/>0.67</th>
+                                            <th className="p-2 bg-purple-50 text-purple-700">例加<br/>1.34</th>
+                                            <th className="p-2 bg-purple-50 text-purple-700">例加<br/>1.67</th>
+                                            <th className="p-2">提早<br/>0.34</th>
+                                            <th className="p-2">未休<br/>0.34</th>
+                                            <th className="p-2">休加<br/>1.34</th>
+                                            <th className="p-2 text-emerald-700 bg-emerald-50">特休<br/>補薪</th>
+                                            <th className="p-2 text-green-700">午餐<br/>津貼</th>
+                                            <th className="p-2 text-green-700 bg-green-50">業務<br/>加給</th>
+                                            <th className="p-2 text-red-700">病假<br/>0.5</th>
+                                            <th className="p-2 text-red-800">事/颱<br/>1.0</th>
+                                            <th className="p-2 text-orange-700">勞健<br/>扣款</th>
+                                            <th className="p-2 sticky right-0 bg-slate-100">實發</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {fullPayrollList.map(item => (
+                                            <tr key={item.id} className="border-b hover:bg-gray-50">
+                                                <td className="p-2 sticky left-0 bg-white font-bold">{item.name}</td>
+                                                <td className="p-1"><input type="text" className="w-14 border bg-gray-100" value={item.actualWorkHours} onChange={e=>updateVal(item.id,'actualWorkHours',e.target.value)} onBlur={e=>handleTimeBlur(item.id,'actualWorkHours',e.target.value)}/></td>
+                                                <td className="p-1 bg-blue-50"><input type="text" className="w-12 border" value={item.wt034} onChange={e=>updateVal(item.id,'wt034',e.target.value)} onBlur={e=>handleTimeBlur(item.id,'wt034',e.target.value)}/></td>
+                                                <td className="p-1 bg-blue-50"><input type="text" className="w-12 border" value={item.wt067} onChange={e=>updateVal(item.id,'wt067',e.target.value)} onBlur={e=>handleTimeBlur(item.id,'wt067',e.target.value)}/></td>
+                                                <td className="p-1 bg-purple-50"><input type="text" className="w-12 border" value={item.hd134} onChange={e=>updateVal(item.id,'hd134',e.target.value)} onBlur={e=>handleTimeBlur(item.id,'hd134',e.target.value)}/></td>
+                                                <td className="p-1 bg-purple-50"><input type="text" className="w-12 border" value={item.hd167} onChange={e=>updateVal(item.id,'hd167',e.target.value)} onBlur={e=>handleTimeBlur(item.id,'hd167',e.target.value)}/></td>
+                                                <td className="p-1"><input type="text" className="w-12 border" value={item.earlyShift} onChange={e=>updateVal(item.id,'earlyShift',e.target.value)} onBlur={e=>handleTimeBlur(item.id,'earlyShift',e.target.value)}/></td>
+                                                <td className="p-1"><input type="text" className="w-12 border" value={item.noLunch} onChange={e=>updateVal(item.id,'noLunch',e.target.value)} onBlur={e=>handleTimeBlur(item.id,'noLunch',e.target.value)}/></td>
+                                                <td className="p-1"><input type="text" className="w-12 border" value={item.holidayOT} onChange={e=>updateVal(item.id,'holidayOT',e.target.value)} onBlur={e=>handleTimeBlur(item.id,'holidayOT',e.target.value)}/></td>
+                                                <td className="p-1 bg-emerald-50"><input type="text" className="w-14 border font-bold text-emerald-700" value={item.annualLeave} onChange={e=>updateVal(item.id,'annualLeave',e.target.value)} onBlur={e=>handleTimeBlur(item.id,'annualLeave',e.target.value)}/></td>
+                                                <td className="p-1"><input type="number" className="w-14 border" value={item.lunchAllowance} onChange={e=>updateVal(item.id,'lunchAllowance',e.target.value)}/></td>
+                                                <td className="p-1 bg-green-50"><input type="number" className="w-14 border font-bold text-green-700" value={item.businessBonus} onChange={e=>updateVal(item.id,'businessBonus',e.target.value)}/></td>
+                                                <td className="p-1"><input type="text" className="w-12 border" value={item.sickLeave} onChange={e=>updateVal(item.id,'sickLeave',e.target.value)} onBlur={e=>handleTimeBlur(item.id,'sickLeave',e.target.value)}/></td>
+                                                <td className="p-1"><input type="text" className="w-12 border" value={item.personalLeave} onChange={e=>updateVal(item.id,'personalLeave',e.target.value)} onBlur={e=>handleTimeBlur(item.id,'personalLeave',e.target.value)}/></td>
+                                                <td className="p-1"><input type="number" className="w-14 border" value={item.deduction} onChange={e=>updateVal(item.id,'deduction',e.target.value)}/></td>
+                                                <td className="p-2 sticky right-0 bg-white font-bold text-blue-700">${item.netPay.toLocaleString()}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+
+                        {activeTab === 'print' && (
+                            <div className="print-block">
+                                <div className="mb-4 flex justify-between print-hidden bg-white p-4 rounded shadow">
+                                    <h2 className="text-xl font-bold">薪資單</h2>
+                                    <button onClick={()=>window.print()} className="px-4 py-2 bg-slate-800 text-white rounded">列印</button>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 print-grid-2">
+                                    {fullPayrollList.map(item => (
+                                        <div key={item.id} className="bg-white border p-4 shadow-sm break-inside-avoid print:border-black" style={{minHeight:'200px'}}>
+                                            <div className="flex justify-between border-b pb-1 mb-2">
+                                                <span className="font-bold text-lg">{item.name} <span className="text-xs font-normal">({item.empId})</span></span>
+                                                <span className="text-sm">{item.period}</span>
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-2 text-xs">
+                                                <div className="border-r pr-2">
+                                                    <div className="font-bold text-slate-500 mb-1">應發項目 (+)</div>
+                                                    <div className="flex justify-between"><span>本薪</span><span>{item.baseSalary}</span></div>
+                                                    {item.wt034 !== "00:00" && <div className="flex justify-between text-blue-700"><span>平加(0.34) {item.wt034}</span><span>{item.payWt034}</span></div>}
+                                                    {item.wt067 !== "00:00" && <div className="flex justify-between text-blue-700"><span>平加(0.67) {item.wt067}</span><span>{item.payWt067}</span></div>}
+                                                    {item.hd134 !== "00:00" && <div className="flex justify-between text-purple-700"><span>例假(1.34) {item.hd134}</span><span>{item.payHd134}</span></div>}
+                                                    {item.hd167 !== "00:00" && <div className="flex justify-between text-purple-700"><span>例假(1.67) {item.hd167}</span><span>{item.payHd167}</span></div>}
+                                                    {item.earlyShift !== "00:00" && <div className="flex justify-between"><span>提早(0.34) {item.earlyShift}</span><span>{item.payEarly}</span></div>}
+                                                    {item.noLunch !== "00:00" && <div className="flex justify-between"><span>未休(0.34) {item.noLunch}</span><span>{item.payNoLunch}</span></div>}
+                                                    {item.holidayOT !== "00:00" && <div className="flex justify-between"><span>休加(1.34) {item.holidayOT}</span><span>{item.payHolidayOT}</span></div>}
+                                                    {item.annualLeave !== "00:00" && <div className="flex justify-between text-emerald-700"><span>特休補薪 {item.annualLeave}</span><span>{item.payAnnual}</span></div>}
+                                                    {item.lunchAllowance > 0 && <div className="flex justify-between text-green-700"><span>午餐津貼</span><span>{item.lunchAllowance}</span></div>}
+                                                    {item.businessBonus > 0 && <div className="flex justify-between text-green-700"><span>業務加給</span><span>{item.businessBonus}</span></div>}
+                                                    <div className="border-t mt-1 pt-1 font-bold flex justify-between"><span>應發合計</span><span>{item.grossPay}</span></div>
+                                                </div>
+                                                <div className="pl-1">
+                                                    <div className="font-bold text-slate-500 mb-1">應扣項目 (-)</div>
+                                                    <div className="flex justify-between text-red-700"><span>勞健保</span><span>{item.insuranceFee}</span></div>
+                                                    {item.dedAbsence > 0 && <div className="flex justify-between text-red-900"><span>缺勤扣款 {item.absenceHoursStr}</span><span>{item.dedAbsence}</span></div>}
+                                                    {item.sickLeave !== "00:00" && <div className="flex justify-between text-red-600"><span>病假(0.5) {item.sickLeave}</span><span>{item.dedSick}</span></div>}
+                                                    {item.personalLeave !== "00:00" && <div className="flex justify-between text-red-800"><span>事/颱(1.0) {item.personalLeave}</span><span>{item.dedPersonal}</span></div>}
+                                                    <div className="border-t mt-1 pt-1 font-bold flex justify-between"><span>應扣合計</span><span>{item.finalDeduction}</span></div>
+                                                </div>
+                                            </div>
+                                            <div className="mt-2 pt-2 border-t flex justify-between items-end">
+                                                <div className="text-xs text-gray-500 w-2/3 truncate">{item.note}</div>
+                                                <div className="text-right">
+                                                    <div className="text-xs text-gray-400 mb-1">工時: {item.actualWorkHours} / 應勤: {item.expectedHours}H</div>
+                                                    <span className="text-xs mr-1">實發</span><span className="text-xl font-bold font-mono">${item.netPay.toLocaleString()}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Modals: Import, Edit, Bulk */}
+                        {isImportModalOpen && <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"><div className="bg-white p-6 rounded shadow-xl w-full max-w-lg"><h3 className="font-bold text-lg mb-4">匯入 Excel</h3><input type="file" ref={fileInputRef} accept=".xlsx,.csv" onChange={handleExcel} className="border p-2 w-full"/><button onClick={()=>setIsImportModalOpen(false)} className="mt-4 px-4 py-2 bg-gray-200 rounded">關閉</button></div></div>}
+                        {isEmpModalOpen && <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"><div className="bg-white p-6 rounded shadow-xl w-full max-w-sm"><h3 className="font-bold text-lg mb-4">編輯員工</h3><form onSubmit={handleSaveEmployee} className="space-y-3"><input name="empId" defaultValue={editingEmp?.empId} placeholder="ID" className="border p-2 w-full"/><input name="name" defaultValue={editingEmp?.name} placeholder="姓名" className="border p-2 w-full"/><input name="title" defaultValue={editingEmp?.title} placeholder="職位" className="border p-2 w-full"/><input name="baseSalary" type="number" defaultValue={editingEmp?.baseSalary} placeholder="底薪" className="border p-2 w-full"/><div className="flex justify-end gap-2"><button type="button" onClick={()=>setIsEmpModalOpen(false)} className="px-3 py-1 border rounded">取消</button><button className="px-3 py-1 bg-blue-600 text-white rounded">儲存</button></div></form></div></div>}
+                        {isBulkModalOpen && <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"><div className="bg-white p-6 rounded shadow-xl w-full max-w-sm"><h3 className="font-bold text-lg mb-4">批量調薪</h3><form onSubmit={handleBulkSubmit} className="space-y-3"><input type="number" value={bulkTargetSalary} onChange={e=>setBulkTargetSalary(e.target.value)} className="border p-2 w-full" placeholder="新底薪"/><div className="flex justify-end gap-2"><button type="button" onClick={()=>setIsBulkModalOpen(false)} className="px-3 py-1 border rounded">取消</button><button className="px-3 py-1 bg-orange-600 text-white rounded">執行</button></div></form></div></div>}
+
+                    </main>
+                </div>
+            );
         };
 
-        // ================= INIT =================
-        function init() {
-            loadStorage();
-            renderKeypad('login-keypad', handleLoginInput);
-            
-            if (GAS_URL.includes("YOUR_GAS")) alert("請設定 GAS URL!");
-            else document.getElementById('gas-status').textContent = "Connected";
-
-            showScreen('login');
-            
-            // 啟動自動計時顯示
-            setInterval(() => {
-                if(uiState.screen === 'working') updateTimerDisplay();
-            }, 1000);
-
-            // 啟動自動同步 (每30秒)
-            setInterval(() => {
-                if(uiState.user) syncQueue(true); // Silent sync
-            }, 30000);
-        }
-
-        function loadStorage() {
-            const raw = localStorage.getItem('mes_v2_sync_data');
-            if (raw) {
-                try { appData = JSON.parse(raw); } catch(e) { console.error(e); }
-            }
-            if (appData.queue.length === 0) appData.queue = [...DEMO_QUEUE];
-        }
-
-        function saveStorage() {
-            localStorage.setItem('mes_v2_sync_data', JSON.stringify(appData));
-        }
-
-        // ================= CLOUD SYNC =================
-        async function syncQueue(silent = false) {
-            if (!silent) showLoading(true);
-            
-            const payload = { token: SECURITY_TOKEN, action: 'GET_QUEUE' };
-
-            try {
-                const response = await fetch(GAS_URL, {
-                    method: 'POST',
-                    mode: 'no-cors',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-                document.getElementById('sync-status').textContent = "✅ Synced";
-                if (!silent) {
-                    setTimeout(() => { showLoading(false); renderQueue(); }, 500);
-                }
-            } catch (e) {
-                console.error("Sync failed", e);
-                document.getElementById('sync-status').textContent = "⚠️ Offline";
-                if (!silent) showLoading(false);
-            }
-        }
-        
-        async function pushQueueToCloud() {
-            showLoading(true);
-            const payload = {
-                token: SECURITY_TOKEN, action: 'SET_QUEUE', queue: appData.queue
-            };
-            await sendToGAS(payload);
-            showLoading(false);
-        }
-
-        async function sendToGAS(payload) {
-            try {
-                await fetch(GAS_URL, {
-                    method: 'POST', mode: 'no-cors',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-            } catch (e) {
-                alert("連線錯誤，資料已存本地");
-            }
-        }
-
-        // ================= SCREEN LOGIC =================
-        function showScreen(id) {
-            document.querySelectorAll('.screen').forEach(el => el.style.display = 'none');
-            document.getElementById('screen-' + id).style.display = 'block';
-            uiState.screen = id;
-
-            const backBtn = document.getElementById('nav-back-btn');
-            const logoutBtn = document.getElementById('nav-logout-btn');
-            
-            if (id === 'login') {
-                backBtn.style.visibility = 'hidden';
-                logoutBtn.style.visibility = 'hidden';
-            } else {
-                logoutBtn.style.visibility = 'visible';
-                backBtn.style.visibility = (id === 'queue' || id === 'admin') ? 'hidden' : 'visible';
-            }
-
-            if (id === 'queue') {
-                renderQueue();
-                syncQueue(true);
-            }
-            if (id === 'admin') renderAdminCreate();
-        }
-
-        function handleNavBack() {
-            if (['working', 'manpower', 'finish'].includes(uiState.screen)) showScreen('queue');
-        }
-
-        function logout() {
-            if(confirm("確定登出？")) {
-                uiState.user = null;
-                uiState.pin = '';
-                document.getElementById('pin-display').textContent = '_ _ _ _';
-                showScreen('login');
-            }
-        }
-
-        function forceReload() {
-            syncQueue();
-        }
-
-        // ================= LOGIN =================
-        function handleLoginInput(key) {
-            if (key === 'C') { uiState.pin = ''; } 
-            else if (key === 'OK') {
-                if (uiState.pin === '9999') {
-                    uiState.user = { name: 'Admin', role: 'admin' };
-                    showScreen('admin');
-                } else if (['1234', '5678'].includes(uiState.pin)) {
-                    uiState.lang = (uiState.pin === '1234') ? 'vn' : 'zh';
-                    uiState.user = { name: uiState.lang==='vn'?'Nguyễn':'陳主管', role: 'supervisor' };
-                    document.getElementById('user-name-display').textContent = `${I18N[uiState.lang].welcome}, ${uiState.user.name}`;
-                    showScreen('queue');
-                } else {
-                    document.getElementById('login-msg').textContent = "PIN Error";
-                    uiState.pin = '';
-                }
-            } else {
-                if (uiState.pin.length < 4) uiState.pin += key;
-            }
-            document.getElementById('pin-display').textContent = uiState.pin.length > 0 ? '● '.repeat(uiState.pin.length) : '_ _ _ _';
-        }
-
-        // ================= QUEUE =================
-        function renderQueue() {
-            const activeList = document.getElementById('active-jobs-list');
-            const queueList = document.getElementById('queue-list');
-            const activeSection = document.getElementById('active-jobs-section');
-            const filter = document.getElementById('queue-filter');
-
-            activeList.innerHTML = '';
-            queueList.innerHTML = '';
-
-            const activeIds = Object.keys(appData.activeJobs);
-            if (activeIds.length > 0) {
-                activeSection.style.display = 'block';
-                activeIds.forEach(woId => {
-                    const job = appData.queue.find(q => q.wo_id === woId) || { prod_zh:'未知', op_zh:'未知' };
-                    const session = appData.activeJobs[woId];
-                    activeList.appendChild(createJobCard(job, true, session));
-                });
-            } else {
-                activeSection.style.display = 'none';
-            }
-
-            const masters = [...new Set(appData.queue.map(j => j.master))];
-            const currentFilter = filter.value;
-            filter.innerHTML = `<option value="ALL">全部顯示 (Show All)</option>`;
-            masters.forEach(m => {
-                const opt = document.createElement('option');
-                opt.value = m; opt.textContent = m;
-                filter.appendChild(opt);
-            });
-            if (currentFilter && masters.includes(currentFilter)) filter.value = currentFilter;
-
-            const filtered = appData.queue.filter(j => !appData.activeJobs[j.wo_id] && (filter.value === 'ALL' || j.master === filter.value));
-            
-            if (filtered.length === 0) {
-                queueList.innerHTML = `<div style="text-align:center; color:#555; padding:20px;">📭 無待辦工單</div>`;
-            } else {
-                filtered.forEach(job => queueList.appendChild(createJobCard(job, false)));
-            }
-        }
-
-        function createJobCard(job, isActive, session) {
-            const div = document.createElement('div');
-            div.className = isActive ? 'job-item active-job-card' : 'job-item';
-            
-            const prodName = uiState.lang === 'vn' ? job.prod_vn : job.prod_zh;
-            const opName = uiState.lang === 'vn' ? job.op_vn : job.op_zh;
-            
-            div.onclick = isActive ? () => openWorkingScreen(job.wo_id) : () => startJobFlow(job.wo_id);
-
-            div.innerHTML = `
-                <div class="job-left">Q${job.rank}</div>
-                <div class="job-main">
-                    <div class="job-title">${prodName}</div>
-                    <div class="job-sub">${opName}</div>
-                    <div class="job-meta">${job.master} ${isActive ? '| 👥 '+session.manpower : ''}</div>
-                </div>
-                ${isActive ? '<div class="job-status">▶️</div>' : ''}
-            `;
-            return div;
-        }
-
-        // ================= WORKING =================
-        function startJobFlow(woId) {
-            uiState.targetWoId = woId;
-            uiState.tempQty = '0';
-            renderKeypad('manpower-keypad', handleManpowerInput);
-            document.getElementById('manpower-display').textContent = '0';
-            showScreen('manpower');
-        }
-
-        function handleManpowerInput(key) {
-            if (key === 'C') uiState.tempQty = '0';
-            else if (key === 'OK') {
-                const val = parseInt(uiState.tempQty);
-                if (val > 0) startSession(uiState.targetWoId, val);
-            } else {
-                uiState.tempQty = (uiState.tempQty === '0' ? key : uiState.tempQty + key);
-            }
-            document.getElementById('manpower-display').textContent = uiState.tempQty;
-        }
-
-        function startSession(woId, manpower) {
-            const now = Date.now();
-            appData.activeJobs[woId] = {
-                startISO: new Date().toISOString(),
-                lastUpdate: now,
-                accTime: 0,
-                manpower: manpower
-            };
-            saveStorage();
-            openWorkingScreen(woId);
-        }
-
-        function openWorkingScreen(woId) {
-            uiState.targetWoId = woId;
-            const job = appData.queue.find(j => j.wo_id === woId);
-            const session = appData.activeJobs[woId];
-            
-            document.getElementById('working-prod').textContent = uiState.lang==='vn' ? job.prod_vn : job.prod_zh;
-            document.getElementById('working-op').textContent = uiState.lang==='vn' ? job.op_vn : job.op_zh;
-            document.getElementById('working-woid').textContent = woId;
-            document.getElementById('working-manpower').textContent = session.manpower;
-            
-            updateTimerDisplay();
-            showScreen('working');
-        }
-
-        function updateTimerDisplay() {
-            if (uiState.screen !== 'working' || !uiState.targetWoId) return;
-            const session = appData.activeJobs[uiState.targetWoId];
-            if (!session) return;
-
-            const diff = Date.now() - session.lastUpdate; 
-            const sec = Math.floor(diff / 1000);
-            const h = Math.floor(sec / 3600).toString().padStart(2,'0');
-            const m = Math.floor((sec % 3600) / 60).toString().padStart(2,'0');
-            const s = (sec % 60).toString().padStart(2,'0');
-            document.getElementById('working-timer').textContent = `${h}:${m}:${s}`;
-        }
-
-        function backToQueue() { showScreen('queue'); }
-        
-        function adjustManpower() {
-            const current = appData.activeJobs[uiState.targetWoId].manpower;
-            const newVal = prompt("輸入新的人數:", current);
-            if (newVal && parseInt(newVal) > 0) {
-                const now = Date.now();
-                const session = appData.activeJobs[uiState.targetWoId];
-                const duration = now - session.lastUpdate;
-                session.accTime += duration * session.manpower;
-                session.lastUpdate = now;
-                session.manpower = parseInt(newVal);
-                saveStorage();
-                document.getElementById('working-manpower').textContent = session.manpower;
-            }
-        }
-
-        // ================= FINISH =================
-        function endJob() {
-            const job = appData.queue.find(j => j.wo_id === uiState.targetWoId);
-            const isSlicing = (job.op_zh.indexOf('分切') >= 0);
-            uiState.finishStep = isSlicing ? 1 : 4;
-            uiState.finishCache = { reject:0, collar:0, tail:0, good:0 };
-            uiState.tempQty = '0';
-            updateFinishUI();
-            renderKeypad('finish-keypad', handleFinishInput);
-            showScreen('finish');
-        }
-
-        function updateFinishUI() {
-            const step = uiState.finishStep;
-            const instr = document.getElementById('finish-instruction');
-            const display = document.getElementById('qty-display');
-            const summary = document.getElementById('finish-summary');
-            const keypad = document.getElementById('finish-keypad');
-
-            summary.style.display = 'none';
-            keypad.style.display = 'grid';
-            display.style.display = 'block';
-
-            if (step === 1) instr.textContent = I18N[uiState.lang].step_reject;
-            else if (step === 2) instr.textContent = I18N[uiState.lang].step_collar;
-            else if (step === 3) instr.textContent = I18N[uiState.lang].step_tail;
-            else if (step === 4) instr.textContent = I18N[uiState.lang].step_total;
-            else if (step === 99) {
-                instr.textContent = I18N[uiState.lang].summary;
-                display.style.display = 'none';
-                summary.style.display = 'block';
-                summary.innerHTML = `
-                    <div class="summary-item"><span>良品</span><span>${uiState.finishCache.good}</span></div>
-                    <div class="summary-item"><span>損耗</span><span>${uiState.finishCache.reject}</span></div>
-                    ${uiState.finishCache.collar > 0 ? `<div class="summary-item"><span>下巴</span><span>${uiState.finishCache.collar}</span></div>` : ''}
-                    ${uiState.finishCache.tail > 0 ? `<div class="summary-item"><span>尾段</span><span>${uiState.finishCache.tail}</span></div>` : ''}
-                    <div style="text-align:center; margin-top:10px; color:var(--success);">按 OK 確認</div>
-                `;
-            }
-            
-            if (step !== 99) display.textContent = uiState.tempQty;
-        }
-
-        function handleFinishInput(key) {
-            if (key === 'C') { uiState.tempQty = '0'; updateFinishUI(); return; }
-            if (key === 'OK') {
-                const val = parseFloat(uiState.tempQty);
-                const step = uiState.finishStep;
-                if (step === 99) { submitData(); return; }
-
-                if (step === 1) uiState.finishCache.reject = val;
-                else if (step === 2) uiState.finishCache.collar = val;
-                else if (step === 3) uiState.finishCache.tail = val;
-                else if (step === 4) uiState.finishCache.good = val;
-
-                uiState.tempQty = '0';
-                if (step === 1) uiState.finishStep = 2;
-                else if (step === 2) uiState.finishStep = 3;
-                else if (step === 3) uiState.finishStep = 4;
-                else if (step === 4) uiState.finishStep = 99;
-                updateFinishUI();
-                return;
-            }
-            uiState.tempQty = (uiState.tempQty === '0' ? key : uiState.tempQty + key);
-            updateFinishUI();
-        }
-
-        async function submitData() {
-            document.getElementById('loading-mask').style.display = 'flex';
-            
-            const session = appData.activeJobs[uiState.targetWoId];
-            const job = appData.queue.find(j => j.wo_id === uiState.targetWoId);
-            
-            const now = Date.now();
-            const lastDuration = now - session.lastUpdate;
-            const totalMs = session.accTime + (lastDuration * session.manpower);
-            const effectiveDuration = totalMs / session.manpower;
-            const effectiveStart = new Date(now - effectiveDuration).toISOString();
-
-            const payload = {
-                token: SECURITY_TOKEN,
-                action: 'LOG_WORK',
-                wo_id: uiState.targetWoId,
-                operation_name: job.op_zh,
-                supervisor_pin: uiState.pin,
-                manpower_count: session.manpower,
-                start_time: effectiveStart,
-                qty_good: uiState.finishCache.good,
-                qty_reject: uiState.finishCache.reject,
-                actual_collar_qty: uiState.finishCache.collar,
-                actual_tail_qty: uiState.finishCache.tail
-            };
-
-            await sendToGAS(payload);
-            delete appData.activeJobs[uiState.targetWoId];
-            appData.queue = appData.queue.filter(j => j.wo_id !== uiState.targetWoId);
-            appData.history.push({ ...payload, end_time: new Date().toISOString() });
-            saveStorage();
-            pushQueueToCloud();
-            
-            document.getElementById('loading-mask').style.display = 'none';
-            showScreen('queue');
-        }
-
-        // ================= ADMIN =================
-        function renderAdminCreate() {
-            const container = document.getElementById('admin-sub-items');
-            if (!container.innerHTML) addAdminRow();
-            
-            const sel = document.getElementById('admin-template');
-            sel.innerHTML = '<option value="">-- 選擇範本 --</option>';
-            appData.templates.forEach((t, i) => {
-                const opt = document.createElement('option');
-                opt.value = i; opt.textContent = t.name;
-                sel.appendChild(opt);
-            });
-        }
-
-        function addAdminRow(prod='', op='') {
-            const container = document.getElementById('admin-sub-items');
-            const div = document.createElement('div');
-            div.className = 'sub-item-row';
-            div.innerHTML = `
-                <input class="admin-input prod" placeholder="產品" value="${prod}">
-                <input class="admin-input op" placeholder="工序" value="${op}">
-                <button class="btn-delete" onclick="this.parentElement.remove()">X</button>
-            `;
-            container.appendChild(div);
-        }
-
-        function saveTemplate() {
-            const mwo = document.getElementById('admin-mwo').value;
-            if(!mwo) return alert("需輸入總工單號");
-            
-            const items = [];
-            document.querySelectorAll('#admin-sub-items .sub-item-row').forEach(row => {
-                items.push({ prod: row.querySelector('.prod').value, op: row.querySelector('.op').value });
-            });
-            
-            // 檢查是否覆蓋
-            const existingIndex = appData.templates.findIndex(t => t.name === mwo);
-            if (existingIndex >= 0) {
-                if (confirm(`範本 ${mwo} 已存在，是否覆蓋 (修改)？`)) {
-                    appData.templates[existingIndex] = { name: mwo, items: items };
-                } else {
-                    return; // 取消
-                }
-            } else {
-                appData.templates.push({ name: mwo, items: items });
-            }
-
-            saveStorage();
-            renderAdminCreate();
-            alert("範本已儲存/更新");
-        }
-
-        function deleteTemplate() {
-            const sel = document.getElementById('admin-template');
-            const idx = sel.value;
-            if (idx === "") return alert("請先選擇要刪除的範本");
-            
-            if (confirm("確定要刪除此範本嗎？")) {
-                appData.templates.splice(idx, 1);
-                saveStorage();
-                renderAdminCreate();
-                // 清空輸入
-                document.getElementById('admin-mwo').value = "";
-                document.getElementById('admin-sub-items').innerHTML = "";
-                addAdminRow();
-            }
-        }
-
-        function loadTemplate() {
-            const idx = document.getElementById('admin-template').value;
-            if(idx === "") return;
-            const tmpl = appData.templates[idx];
-            document.getElementById('admin-mwo').value = tmpl.name; // 載入原始名稱
-            document.getElementById('admin-sub-items').innerHTML = '';
-            tmpl.items.forEach(i => addAdminRow(i.prod, i.op));
-        }
-
-        function publishWorkOrders() {
-            const mwo = document.getElementById('admin-mwo').value;
-            if(!mwo) return alert("缺單號");
-            let count = 0;
-            document.querySelectorAll('#admin-sub-items .sub-item-row').forEach(row => {
-                const prod = row.querySelector('.prod').value;
-                const op = row.querySelector('.op').value;
-                if(prod && op) {
-                    count++;
-                    appData.queue.push({
-                        wo_id: `${mwo}-Q${Date.now()}-${count}`,
-                        master: mwo, prod_zh: prod, prod_vn: prod, op_zh: op, op_vn: op,
-                        rank: appData.queue.length + 1, st: 1.0
-                    });
-                }
-            });
-            saveStorage();
-            pushQueueToCloud();
-            alert(`已發布 ${count} 張工單`);
-            // 清空
-            document.getElementById('admin-mwo').value = '';
-            document.getElementById('admin-sub-items').innerHTML = '';
-            addAdminRow();
-        }
-        
-        function resetData() {
-            if(confirm("Reset all data?")) { localStorage.clear(); location.reload(); }
-        }
-
-        function showAdminTab(tab) {
-            if(tab === 'create') {
-                document.getElementById('admin-tab-create').style.display = 'block';
-                document.getElementById('admin-tab-history').style.display = 'none';
-            } else {
-                document.getElementById('admin-tab-create').style.display = 'none';
-                document.getElementById('admin-tab-history').style.display = 'block';
-                renderHistory();
-            }
-        }
-
-        function renderHistory() {
-            const list = document.getElementById('history-list');
-            list.innerHTML = appData.history.map(h => `
-                <div style="border-bottom:1px solid #333; padding:10px;">
-                    <div>${h.operation_name} - ${h.wo_id}</div>
-                    <div style="color:#666; font-size:0.8rem;">${h.start_time}</div>
-                </div>
-            `).join('');
-        }
-
-        function renderKeypad(id, handler) {
-            const el = document.getElementById(id);
-            el.innerHTML = '';
-            ['7','8','9','4','5','6','1','2','3','C','0','OK'].forEach(k => {
-                const btn = document.createElement('button');
-                btn.className = `key-btn ${k==='OK'?'key-confirm':''} ${k==='C'?'key-clear':''}`;
-                btn.textContent = k;
-                btn.onclick = () => handler(k);
-                el.appendChild(btn);
-            });
-        }
-
-        function showLoading(show) {
-            document.getElementById('loading-mask').style.display = show ? 'flex' : 'none';
-        }
-
-        // Start
-        document.addEventListener('DOMContentLoaded', init);
-        
-        function forceReload() {
-            syncQueue();
-        }
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<PayrollApp />);
     </script>
 </body>
 </html>
