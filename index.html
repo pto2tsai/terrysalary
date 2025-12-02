@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>薪資管理系統 (V19 - 特休邏輯修正版)</title>
+    <title>薪資管理系統 (V20 - 特休邏輯修正版)</title>
     
     <!-- 1. 引入樣式與核心庫 -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -197,8 +197,9 @@
                 const payNoLunch = Math.round(timeStrToHours(d.noLunch) * 0.34 * hourlyRate);
                 const payHolidayOT = Math.round(timeStrToHours(d.holidayOT) * 1.34 * hourlyRate);
                 
-                // 特休補薪：特休時數 * 1.0 * 時薪 (維持原先邏輯，但從底薪檢核中排除)
-                const payAnnual = Math.round(timeStrToHours(d.annualLeave) * 1.0 * hourlyRate); 
+                // 特休補薪：特休時數 * 1.0 * 時薪 (不再計入總加項)
+                // const payAnnual = Math.round(timeStrToHours(d.annualLeave) * 1.0 * hourlyRate); // V18
+                const payAnnual = 0; // V19: 特休薪資已包含在底薪中，不需額外加項
 
                 const allowances = (parseInt(d.lunchAllowance) || 0) + (parseInt(d.businessBonus) || 0) + (parseInt(d.otherBonus) || 0);
                 const totalAdditions = payWt034 + payWt067 + payHd134 + payHd167 + payEarly + payNoLunch + payHolidayOT + payAnnual + allowances;
@@ -234,7 +235,7 @@
 
                 return { 
                     hourlyRate, 
-                    payWt034, payWt067, payHd134, payHd167, payEarly, payNoLunch, payHolidayOT, payAnnual,
+                    payWt034, payWt067, payHd134, payHd167, payEarly, payNoLunch, payHolidayOT, payAnnual: payAnnual, // V19: payAnnual 應為 0
                     dedSick, dedPersonal, dedAbsence, absenceHoursStr: hoursToTimeStr(absenceHoursVal), expectedHours,
                     totalAdditions, finalDeduction, netPay, insuranceFee, grossPay
                 };
@@ -337,7 +338,6 @@
                         
                         const idx = { id:-1, name:-1, wt034:-1, wt067:-1, hd134:-1, hd167:-1, early:-1, noLunch:-1, holidayOT:-1, lunch:-1, bonus:-1, ins:-1, note:-1, expDays:-1, actHours:-1, annual:-1, dept:-1 };
                         
-                        // 修正：使用嚴格順序抓取 (第一個出現的)
                         headers.forEach((h, i) => {
                             const t = String(h).trim();
                             if(t.includes("員工編號")) idx.id = i;
@@ -354,7 +354,7 @@
                             else if(t.includes("實上班") || t.includes("實際出勤")) { if(t.includes("時數")) idx.actHours = i; }
                             else if(t.includes("特休") && !t.includes("備註")) idx.annual = i; 
 
-                            // V18 精準對應修正：使用嚴格順序抓取 (第一個出現的)
+                            // V19 精準對應修正：使用嚴格順序抓取 (第一個出現的)
                             if(t.includes("平日") && (t.includes("0.34") || t.includes("0.33")) && idx.wt034 === -1) idx.wt034 = i;
                             if(t.includes("平日") && (t.includes("0.67") || t.includes("0.66")) && idx.wt067 === -1) idx.wt067 = i;
                             
@@ -491,7 +491,7 @@
                 <div className="min-h-screen pb-10">
                     <nav className="bg-slate-800 text-white shadow-lg print-hidden sticky top-0 z-40">
                         <div className="max-w-7xl mx-auto px-4 flex justify-between h-16 items-center">
-                            <div className="flex items-center space-x-2"><Icons.Calculator className="w-6 h-6 text-yellow-400"/><span className="font-bold text-xl">薪資管理系統 V18</span></div>
+                            <div className="flex items-center space-x-2"><Icons.Calculator className="w-6 h-6 text-yellow-400"/><span className="font-bold text-xl">薪資管理系統 V19</span></div>
                             <div className="flex space-x-2">
                                 <button onClick={()=>setActiveTab('employees')} className={`px-3 py-1 rounded ${activeTab==='employees'?'bg-yellow-500 text-black':'hover:bg-slate-700'}`}>設定</button>
                                 <button onClick={()=>setActiveTab('input')} className={`px-3 py-1 rounded ${activeTab==='input'?'bg-yellow-500 text-black':'hover:bg-slate-700'}`}>結算</button>
@@ -547,7 +547,7 @@
                                             <th className="p-2">提早<br/>0.34</th>
                                             <th className="p-2">未休<br/>0.34</th>
                                             <th className="p-2">休加<br/>1.34</th>
-                                            <th className="p-2 text-emerald-700 bg-emerald-50">特休<br/>補薪</th>
+                                            <th className="p-2 text-emerald-700 bg-emerald-50">特休<br/>時數</th>
                                             <th className="p-2 text-green-700">午餐<br/>津貼</th>
                                             <th className="p-2 text-green-700 bg-green-50">業務<br/>加給</th>
                                             <th className="p-2 text-green-700 bg-green-50">其它<br/>加項</th>
