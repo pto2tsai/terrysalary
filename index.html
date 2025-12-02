@@ -16,16 +16,27 @@
         /* 基礎樣式與列印設定 */
         body { background-color: #f3f4f6; color: #1f2937; font-family: system-ui, -apple-system, sans-serif; }
         @media print {
-            @page { size: A4; margin: 5mm; }
+            @page { size: A4; margin: 8mm; } /* 增加邊距以容納更大字體 */
             body { background-color: white; -webkit-print-color-adjust: exact; }
             .print-hidden { display: none !important; }
             .print-block { display: block !important; }
-            .print-grid-2 { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 0.5rem !important; }
+            /* 調整為 2欄 x 3列，加大高度 */
+            .print-grid-2 { 
+                display: grid !important; 
+                grid-template-columns: 1fr 1fr !important; 
+                gap: 1.5rem 0.8rem !important; /* 加大行間距 */
+            }
             .break-inside-avoid { break-inside: avoid; page-break-inside: avoid; }
-            .print-text-xs { font-size: 10px !important; line-height: 1.2 !important; }
-            .print-text-tiny { font-size: 9px !important; line-height: 1.1 !important; }
-            .print-text-base { font-size: 14px !important; }
+            /* 字體放大 */
+            .print-text-xs { font-size: 11px !important; line-height: 1.3 !important; }
+            .print-text-tiny { font-size: 10px !important; line-height: 1.2 !important; }
+            .print-text-base { font-size: 16px !important; font-weight: 700 !important; }
+            .print-text-xl { font-size: 20px !important; font-weight: 900 !important; }
+            .print-net-pay { font-size: 24px !important; font-weight: 900 !important; }
             ::-webkit-scrollbar { display: none; }
+            
+            /* 確保薪資單高度平均分配 (約1/3高) */
+            .payroll-slip { height: 100mm; } 
         }
         .animate-fade-in { animation: fadeIn 0.3s ease-in-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
@@ -197,9 +208,8 @@
                 const payNoLunch = Math.round(timeStrToHours(d.noLunch) * 0.34 * hourlyRate);
                 const payHolidayOT = Math.round(timeStrToHours(d.holidayOT) * 1.34 * hourlyRate);
                 
-                // 特休補薪：特休時數 * 1.0 * 時薪 (不再計入總加項)
-                // const payAnnual = Math.round(timeStrToHours(d.annualLeave) * 1.0 * hourlyRate); // V18
-                const payAnnual = 0; // V19: 特休薪資已包含在底薪中，不需額外加項
+                // 特休補薪：V19 移除，但為了保持數據結構與Excel匯出邏輯，保留 payAnnual = 0
+                const payAnnual = 0;
 
                 const allowances = (parseInt(d.lunchAllowance) || 0) + (parseInt(d.businessBonus) || 0) + (parseInt(d.otherBonus) || 0);
                 const totalAdditions = payWt034 + payWt067 + payHd134 + payHd167 + payEarly + payNoLunch + payHolidayOT + payAnnual + allowances;
@@ -211,7 +221,7 @@
                 
                 // V19 缺勤檢核：將特休時數加到實際工時中，防止它被誤扣底薪
                 const expectedHours = (d.expectedWorkDays || 0) * 8; 
-                const actualWorkHoursIncludingAnnual = timeStrToHours(d.actualWorkHours) + timeStrToHours(d.annualLeave);
+                const actualWorkHoursIncludingAnnual = timeStrToHours(d.actualWorkHours) + timeStrToHours(d.annualLeave) + timeStrToHours(d.bereavementLeave);
                 let absenceHoursVal = 0;
                 let dedAbsence = 0;
 
@@ -235,7 +245,7 @@
 
                 return { 
                     hourlyRate, 
-                    payWt034, payWt067, payHd134, payHd167, payEarly, payNoLunch, payHolidayOT, payAnnual: payAnnual, // V19: payAnnual 應為 0
+                    payWt034, payWt067, payHd134, payHd167, payEarly, payNoLunch, payHolidayOT, payAnnual: payAnnual,
                     dedSick, dedPersonal, dedAbsence, absenceHoursStr: hoursToTimeStr(absenceHoursVal), expectedHours,
                     totalAdditions, finalDeduction, netPay, insuranceFee, grossPay
                 };
@@ -478,7 +488,8 @@
                 const exportData = fullPayrollList.map((item, index) => ({
                     '序號': index + 1, '部門': item.department || '', '員工編號': item.empId, '姓名': item.name, '職稱': item.title, '基本底薪': item.baseSalary,
                     '加班費合計': item.payWt034 + item.payWt067 + item.payHd134 + item.payHd167 + item.payEarly + item.payNoLunch + item.payHolidayOT,
-                    '特休補薪': item.payAnnual, '各項津貼': item.lunchAllowance + item.businessBonus + item.otherBonus, '應發金額': item.grossPay,
+                    '特休時數': item.annualLeave, // V19 修正：不再匯出補薪金額，改為時數
+                    '各項津貼': item.lunchAllowance + item.businessBonus + item.otherBonus, '應發金額': item.grossPay,
                     '勞健保': item.insuranceFee, '請假扣款': item.dedSick + item.dedPersonal + item.dedAbsence, '應扣金額': item.finalDeduction, '實發金額': item.netPay, '簽名/蓋章': ''
                 }));
                 const ws = XLSX.utils.json_to_sheet(exportData);
@@ -595,12 +606,12 @@
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 print-grid-2">
                                     {fullPayrollList.map(item => (
-                                        <div key={item.id} className="bg-white border p-4 shadow-sm break-inside-avoid print:border-black" style={{minHeight:'200px'}}>
-                                            <div className="flex justify-between border-b pb-1 mb-2">
-                                                <span className="font-bold text-lg">{item.name} <span className="text-xs font-normal">({item.empId})</span></span>
+                                        <div key={item.id} className="bg-white border p-4 shadow-sm break-inside-avoid print:border-black payroll-slip">
+                                            <div className="flex justify-between border-b pb-1 mb-2 print-text-base">
+                                                <span className="font-bold print-text-base">{item.name} <span className="text-xs font-normal">({item.empId})</span></span>
                                                 <span className="text-sm">{item.period}</span>
                                             </div>
-                                            <div className="grid grid-cols-2 gap-2 text-xs">
+                                            <div className="grid grid-cols-2 gap-2 print-text-xs">
                                                 <div className="border-r pr-2">
                                                     <div className="font-bold text-slate-500 mb-1">應發項目 (+)</div>
                                                     <div className="flex justify-between"><span>本薪</span><span>{item.baseSalary}</span></div>
@@ -611,7 +622,6 @@
                                                     {item.payEarly>0 && <div className="flex justify-between"><span>提早(0.34) {item.earlyShift}</span><span>{item.payEarly}</span></div>}
                                                     {item.payNoLunch>0 && <div className="flex justify-between"><span>未休(0.34) {item.noLunch}</span><span>{item.payNoLunch}</span></div>}
                                                     {item.payHolidayOT>0 && <div className="flex justify-between"><span>休加(1.34) {item.holidayOT}</span><span>{item.payHolidayOT}</span></div>}
-                                                    {item.payAnnual>0 && <div className="flex justify-between text-emerald-700"><span>特休補薪 {item.annualLeave}</span><span>{item.payAnnual}</span></div>}
                                                     {item.lunchAllowance>0 && <div className="flex justify-between text-green-700"><span>午餐津貼</span><span>{item.lunchAllowance}</span></div>}
                                                     {item.businessBonus>0 && <div className="flex justify-between text-green-700"><span>業務加給</span><span>{item.businessBonus}</span></div>}
                                                     {item.otherBonus>0 && <div className="flex justify-between text-green-700"><span>其它加項</span><span>{item.otherBonus}</span></div>}
@@ -627,10 +637,9 @@
                                                 </div>
                                             </div>
                                             <div className="mt-2 pt-2 border-t flex justify-between items-end">
-                                                <div className="text-xs text-gray-500 w-2/3 truncate">{item.note}</div>
+                                                <div className="text-xs text-gray-500 w-2/3 truncate print-text-tiny">實際工時:{item.actualWorkHours} / 應勤:{item.expectedHours}H</div>
                                                 <div className="text-right">
-                                                    <div className="text-xs text-gray-400 mb-1">工時: {item.actualWorkHours} / 應勤: {item.expectedHours}H</div>
-                                                    <span className="text-xs mr-1">實發</span><span className="text-xl font-bold font-mono">${item.netPay.toLocaleString()}</span>
+                                                    <span className="print-text-base mr-1">實發</span><span className="print-net-pay font-mono">${item.netPay.toLocaleString()}</span>
                                                 </div>
                                             </div>
                                         </div>
