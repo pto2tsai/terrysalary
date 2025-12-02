@@ -1,0 +1,644 @@
+﻿<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>薪資管理系統 (穩定版)</title>
+    
+    <!-- 1. 引入樣式與核心庫 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+
+    <style>
+        /* 基礎樣式與列印設定 */
+        body { background-color: #f3f4f6; color: #1f2937; font-family: system-ui, -apple-system, sans-serif; }
+        @media print {
+            @page { size: A4; margin: 5mm; }
+            body { background-color: white; -webkit-print-color-adjust: exact; }
+            .print-hidden { display: none !important; }
+            .print-block { display: block !important; }
+            .print-grid-2 { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 0.5rem !important; }
+            .break-inside-avoid { break-inside: avoid; page-break-inside: avoid; }
+            .print-text-xs { font-size: 10px !important; line-height: 1.2 !important; }
+            .print-text-tiny { font-size: 9px !important; line-height: 1.1 !important; }
+            .print-text-base { font-size: 14px !important; }
+            ::-webkit-scrollbar { display: none; }
+        }
+        .animate-fade-in { animation: fadeIn 0.3s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        
+        /* 載入畫面樣式 */
+        #loading-screen { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: white; z-index: 50; }
+        #error-display { display: none; padding: 20px; color: red; background: #fee2e2; border: 1px solid #ef4444; margin: 20px; border-radius: 8px; }
+        .dashed-border { background-image: url("data:image/svg+xml,%3csvg width='100%25' height='100%25' xmlns='http://www.w3.org/2000/svg'%3e%3crect width='100%25' height='100%25' fill='none' rx='16' ry='16' stroke='%233B82F6FF' stroke-width='4' stroke-dasharray='12%2c 12' stroke-dashoffset='0' stroke-linecap='square'/%3e%3c/svg%3e"); }
+    </style>
+
+    <!-- 2. 全域錯誤攔截 (防止白屏無回應) -->
+    <script>
+        window.onerror = function(msg, url, line, col, error) {
+            document.getElementById('loading-screen').style.display = 'none';
+            const errorBox = document.getElementById('error-display');
+            errorBox.style.display = 'block';
+            errorBox.innerHTML = `
+                <h2 style="font-weight:bold; font-size:1.2em; margin-bottom:10px;">⚠️ 系統發生錯誤</h2>
+                <p><strong>錯誤訊息：</strong> ${msg}</p>
+                <p><strong>位置：</strong> 行 ${line}, 列 ${col}</p>
+                <button onclick="resetApp()" style="margin-top:15px; padding:8px 16px; background:#dc2626; color:white; border:none; border-radius:4px; cursor:pointer;">
+                    清除資料並修復
+                </button>
+            `;
+            return false;
+        };
+
+        function resetApp() {
+            localStorage.removeItem('payroll_employees');
+            localStorage.removeItem('payroll_data');
+            alert('已清除暫存資料，系統將重新整理。');
+            window.location.reload();
+        }
+    </script>
+</head>
+<body>
+
+    <!-- 載入指示器 -->
+    <div id="loading-screen">
+        <div style="width: 40px; height: 40px; border: 4px solid #e5e7eb; border-top-color: #3b82f6; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+        <p style="margin-top: 15px; color: #6b7280;">系統載入中...</p>
+        <button onclick="resetApp()" style="margin-top: 20px; font-size: 12px; color: #ef4444; text-decoration: underline; background: none; border: none; cursor: pointer;">
+            若卡住太久，請點此重置
+        </button>
+        <style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>
+    </div>
+
+    <!-- 錯誤顯示區 -->
+    <div id="error-display"></div>
+
+    <!-- React 渲染根節點 -->
+    <div id="root"></div>
+
+    <!-- 3. React 應用程式邏輯 -->
+    <script type="text/babel">
+        // 確保 React 載入後移除 Loading
+        setTimeout(() => {
+            const loader = document.getElementById('loading-screen');
+            if(loader) loader.style.display = 'none';
+        }, 800);
+
+        const { useState, useMemo, useEffect, useRef } = React;
+
+        // --- 圖示組件 ---
+        const Icon = ({ path, className }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                {path}
+            </svg>
+        );
+
+        const Icons = {
+            Calculator: (props) => <Icon {...props} path={<><rect width="16" height="20" x="4" y="2" rx="2"/><line x1="8" x2="16" y1="6" y2="6"/><line x1="16" x2="16" y1="14" y2="18"/><path d="M16 10h.01"/><path d="M12 10h.01"/><path d="M8 10h.01"/><path d="M12 14h.01"/><path d="M8 14h.01"/><path d="M12 18h.01"/><path d="M8 18h.01"/></>} />,
+            Users: (props) => <Icon {...props} path={<><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></>} />,
+            Printer: (props) => <Icon {...props} path={<><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/></>} />,
+            Plus: (props) => <Icon {...props} path={<><path d="M5 12h14"/><path d="M12 5v14"/></>} />,
+            Trash2: (props) => <Icon {...props} path={<><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></>} />,
+            Settings: (props) => <Icon {...props} path={<><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.09a2 2 0 0 1-1-1.74v-.47a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.39a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></>} />,
+            Upload: (props) => <Icon {...props} path={<><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></>} />,
+            Clock: (props) => <Icon {...props} path={<><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></>} />,
+            HelpCircle: (props) => <Icon {...props} path={<><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></>} />,
+            FileSpreadsheet: (props) => <Icon {...props} path={<><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><path d="M8 13h2"/><path d="M8 17h2"/><path d="M14 13h2"/><path d="M14 17h2"/></>} />,
+            RefreshCw: (props) => <Icon {...props} path={<><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></>} />
+        };
+
+        const INITIAL_EMPLOYEES = [
+            { id: 1, name: '範例-張耀升', empId: 'W0001', baseSalary: 45000, laborFee: 1100, healthFee: 750, title: '作業員' },
+        ];
+
+        const INITIAL_PAYROLL_DATA = [
+            { empId: 1, period: '2025-11', overtimeHours: 10, leaveHours: 0, annualLeaveHours: 0, bonus: 0, deduction: 0, note: '' },
+        ];
+
+        const PayrollApp = () => {
+            const [activeTab, setActiveTab] = useState('input');
+            
+            // 安全讀取 LocalStorage
+            const [employees, setEmployees] = useState(() => {
+                try {
+                    const saved = localStorage.getItem('payroll_employees');
+                    return saved ? JSON.parse(saved) : INITIAL_EMPLOYEES;
+                } catch(e) { return INITIAL_EMPLOYEES; }
+            });
+            const [payrollData, setPayrollData] = useState(() => {
+                try {
+                    const saved = localStorage.getItem('payroll_data');
+                    return saved ? JSON.parse(saved) : INITIAL_PAYROLL_DATA;
+                } catch(e) { return INITIAL_PAYROLL_DATA; }
+            });
+            
+            const [currentPeriod, setCurrentPeriod] = useState(new Date().toISOString().slice(0, 7));
+            const [editingEmp, setEditingEmp] = useState(null);
+            const [isEmpModalOpen, setIsEmpModalOpen] = useState(false);
+            const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+            const fileInputRef = useRef(null);
+
+            useEffect(() => { localStorage.setItem('payroll_employees', JSON.stringify(employees)); }, [employees]);
+            useEffect(() => { localStorage.setItem('payroll_data', JSON.stringify(payrollData)); }, [payrollData]);
+
+            // --- 薪資計算核心 (自動連動) ---
+            const calculateSalary = (emp, data) => {
+                if (!emp) return null;
+                const entry = data || { overtimeHours: 0, leaveHours: 0, annualLeaveHours: 0, bonus: 0, deduction: 0 };
+                
+                // 1. 時薪 = 底薪 / 240
+                const hourlyRate = Math.round(emp.baseSalary / 240);
+                
+                // 2. 加班費 (預設倍率 1.34)
+                const overtimePay = Math.round(entry.overtimeHours * hourlyRate * 1.34);
+                
+                // 3. 扣薪假 (全額扣時薪)
+                const leaveDeduction = Math.round(entry.leaveHours * hourlyRate);
+                
+                // 4. 應發
+                const grossPay = emp.baseSalary + overtimePay + (parseInt(entry.bonus) || 0);
+                
+                // 5. 應扣 (優先使用當月匯入的 deduction，如果沒有則使用員工設定的勞健保)
+                let totalDeduction = 0;
+                let insuranceFee = 0;
+
+                if (entry.hasImportedInsurance) {
+                    totalDeduction = leaveDeduction + (parseInt(entry.deduction) || 0);
+                    insuranceFee = parseInt(entry.deduction) || 0;
+                } else {
+                    insuranceFee = emp.laborFee + emp.healthFee;
+                    totalDeduction = insuranceFee + leaveDeduction + (parseInt(entry.deduction) || 0);
+                }
+                
+                const netPay = grossPay - totalDeduction;
+                return { hourlyRate, overtimePay, leaveDeduction, grossPay, totalDeduction, netPay, insuranceFee };
+            };
+
+            const fullPayrollList = useMemo(() => {
+                return employees.map(emp => {
+                    let data = payrollData.find(d => d.empId === emp.id && d.period === currentPeriod);
+                    if (!data) {
+                        data = { empId: emp.id, period: currentPeriod, overtimeHours: 0, leaveHours: 0, annualLeaveHours: 0, bonus: 0, deduction: 0, note: '' };
+                    }
+                    const calc = calculateSalary(emp, data);
+                    return { ...emp, ...data, ...calc };
+                });
+            }, [employees, payrollData, currentPeriod]);
+
+            // 判斷該月份是否有有效數據 (控制顯示大按鈕)
+            const hasDataForCurrentMonth = useMemo(() => {
+                // 如果 payrollData 裡完全沒有這個月份的資料，就是沒有
+                return fullPayrollList.some(item => 
+                    item.overtimeHours > 0 || item.leaveHours > 0 || item.bonus > 0 || item.deduction > 0 || (item.note && item.note.length > 0)
+                );
+            }, [fullPayrollList]);
+
+            const handlePayrollChange = (empId, field, value) => {
+                setPayrollData(prev => {
+                    const existingIndex = prev.findIndex(p => p.empId === empId && p.period === currentPeriod);
+                    const val = field === 'note' || field === 'period' ? value : Number(value);
+                    if (existingIndex >= 0) {
+                        const newData = [...prev];
+                        if (field === 'deduction') {
+                             newData[existingIndex] = { ...newData[existingIndex], [field]: val, hasImportedInsurance: false };
+                        } else {
+                             newData[existingIndex] = { ...newData[existingIndex], [field]: val };
+                        }
+                        return newData;
+                    } else {
+                        const newData = { empId, period: currentPeriod, overtimeHours: 0, leaveHours: 0, annualLeaveHours: 0, bonus: 0, deduction: 0, note: '', [field]: val };
+                        return [...prev, newData];
+                    }
+                });
+            };
+
+            const handleSaveEmployee = (e) => {
+                e.preventDefault();
+                const formData = new FormData(e.target);
+                const newEmp = {
+                    id: editingEmp ? editingEmp.id : Date.now(),
+                    name: formData.get('name'),
+                    empId: formData.get('empId'),
+                    title: formData.get('title'),
+                    baseSalary: Number(formData.get('baseSalary')),
+                    laborFee: Number(formData.get('laborFee')),
+                    healthFee: Number(formData.get('healthFee')),
+                };
+                if (editingEmp) {
+                    setEmployees(prev => prev.map(emp => emp.id === editingEmp.id ? newEmp : emp));
+                } else {
+                    setEmployees(prev => [...prev, newEmp]);
+                }
+                setIsEmpModalOpen(false);
+                setEditingEmp(null);
+            };
+
+            const deleteEmployee = (id) => {
+                if (confirm('確定要刪除？')) setEmployees(prev => prev.filter(e => e.id !== id));
+            };
+
+            const clearAllData = () => {
+                if(confirm('警告：這將會清空所有員工資料與薪資紀錄，無法復原！確定要清空嗎？')) {
+                    setEmployees([]);
+                    setPayrollData([]);
+                    alert('資料已清空，請開始新增您的員工。');
+                }
+            };
+
+            // --- 進階 Excel 解析邏輯 ---
+            const parseTime = (val) => {
+                if (typeof val === 'number') {
+                    if (val < 1 && val > 0) return parseFloat((val * 24).toFixed(2));
+                    return parseFloat(val.toFixed(2));
+                }
+                if (typeof val === 'string') {
+                    if (val.includes(':')) {
+                        const parts = val.split(':');
+                        const h = parseInt(parts[0]) || 0;
+                        const m = parseInt(parts[1]) || 0;
+                        return parseFloat((h + m / 60).toFixed(2));
+                    }
+                }
+                return 0;
+            };
+
+            const parseLeaveFromNote = (note) => {
+                let leaveH = 0;
+                let annualH = 0;
+                if (!note) return { leaveH, annualH };
+                const str = note.toString();
+                const leaveMatch = str.match(/(事假|病假|曠職|扣薪)\s*(\d+)([:\.](\d+))?/);
+                if (leaveMatch) {
+                    const h = parseInt(leaveMatch[2]) || 0;
+                    const m = parseInt(leaveMatch[4]) || 0;
+                    leaveH += h + (m/60);
+                }
+                const annualMatch = str.match(/(特休|年假)\s*(\d+)([:\.](\d+))?/);
+                if (annualMatch) {
+                    const h = parseInt(annualMatch[2]) || 0;
+                    const m = parseInt(annualMatch[4]) || 0;
+                    annualH += h + (m/60);
+                }
+                return { leaveH, annualH };
+            };
+
+            const handleFileUpload = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (evt) => {
+                    try {
+                        const bstr = evt.target.result;
+                        const wb = XLSX.read(bstr, { type: 'binary' });
+                        const ws = wb.Sheets[wb.SheetNames[0]];
+                        const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
+                        processTotalTable(data);
+                    } catch (error) {
+                        alert("匯入失敗，請確認檔案格式是否正確。");
+                        console.error(error);
+                    }
+                    if(fileInputRef.current) fileInputRef.current.value = '';
+                };
+                reader.readAsBinaryString(file);
+            };
+
+            const processTotalTable = (data) => {
+                let headerRowIndex = -1;
+                for (let i = 0; i < Math.min(data.length, 10); i++) {
+                    const rowStr = JSON.stringify(data[i]);
+                    if (rowStr.includes("員工編號") || rowStr.includes("工號")) {
+                        headerRowIndex = i;
+                        break;
+                    }
+                }
+
+                if (headerRowIndex === -1) {
+                    alert("無法識別表格格式：找不到「員工編號」欄位。");
+                    return;
+                }
+
+                const headers = data[headerRowIndex];
+                const rows = data.slice(headerRowIndex + 1);
+
+                const idx = {
+                    id: -1, name: -1, ot1: [], ot2: [], bonus: -1, insurance: -1, note: -1
+                };
+
+                headers.forEach((h, i) => {
+                    const text = String(h).trim();
+                    if (text.includes("員工編號") || text.includes("工號")) idx.id = i;
+                    else if (text.includes("員工姓名") || text.includes("姓名")) idx.name = i;
+                    else if (text.includes("1.33")) idx.ot1.push(i);
+                    else if (text.includes("1.66")) idx.ot2.push(i);
+                    else if (text.includes("補助") || text.includes("獎金")) idx.bonus = i;
+                    else if (text.includes("勞健保")) idx.insurance = i;
+                    else if (text.includes("備註")) idx.note = i;
+                });
+
+                if (idx.note === -1) idx.note = headers.length - 1;
+
+                let successCount = 0;
+                const newPayrollData = [...payrollData];
+                const newEmployees = [...employees];
+
+                rows.forEach(row => {
+                    const empId = String(row[idx.id] || "").trim();
+                    const empName = String(row[idx.name] || "").trim();
+                    if (!empId) return;
+
+                    let employee = newEmployees.find(e => e.empId === empId);
+                    if (!employee && empName) {
+                        employee = {
+                            id: Date.now() + Math.random(),
+                            empId: empId,
+                            name: empName,
+                            baseSalary: 27470,
+                            laborFee: 0,
+                            healthFee: 0,
+                            title: '員工'
+                        };
+                        newEmployees.push(employee);
+                    }
+
+                    if (employee) {
+                        let overtimeHours = 0;
+                        idx.ot1.forEach(col => overtimeHours += parseTime(row[col]));
+                        idx.ot2.forEach(col => overtimeHours += parseTime(row[col]));
+
+                        const bonus = parseInt(row[idx.bonus]) || 0;
+                        const insurance = parseInt(row[idx.insurance]) || 0;
+                        const noteText = String(row[idx.note] || "");
+                        const { leaveH, annualH } = parseLeaveFromNote(noteText);
+
+                        const dataEntry = {
+                            empId: employee.id,
+                            period: currentPeriod,
+                            overtimeHours: parseFloat(overtimeHours.toFixed(2)),
+                            leaveHours: parseFloat(leaveH.toFixed(2)),
+                            annualLeaveHours: parseFloat(annualH.toFixed(2)),
+                            bonus: bonus,
+                            deduction: insurance,
+                            hasImportedInsurance: insurance > 0,
+                            note: noteText
+                        };
+
+                        const existingIndex = newPayrollData.findIndex(p => p.empId === employee.id && p.period === currentPeriod);
+                        if (existingIndex >= 0) {
+                            newPayrollData[existingIndex] = { ...newPayrollData[existingIndex], ...dataEntry };
+                        } else {
+                            newPayrollData.push(dataEntry);
+                        }
+                        successCount++;
+                    }
+                });
+
+                setEmployees(newEmployees);
+                setPayrollData(newPayrollData);
+                setIsImportModalOpen(false);
+                alert(`匯入完成！共處理 ${successCount} 筆資料。`);
+            };
+
+            return (
+                <div className="min-h-screen pb-10">
+                    <nav className="bg-slate-800 text-white shadow-lg print-hidden sticky top-0 z-40">
+                        <div className="max-w-7xl mx-auto px-4">
+                            <div className="flex items-center justify-between h-16">
+                                <div className="flex items-center space-x-2">
+                                    <Icons.Calculator className="w-6 h-6 text-yellow-400" />
+                                    <span className="font-bold text-xl tracking-wide">薪資管理系統</span>
+                                </div>
+                                <div className="flex space-x-2 md:space-x-4">
+                                    <button onClick={() => setActiveTab('employees')} className={`px-4 py-2 rounded-md text-sm font-bold transition-colors ${activeTab === 'employees' ? 'bg-yellow-500 text-slate-900' : 'hover:bg-slate-700'}`}>1. 員工設定</button>
+                                    <button onClick={() => setActiveTab('input')} className={`px-4 py-2 rounded-md text-sm font-bold transition-colors ${activeTab === 'input' ? 'bg-yellow-500 text-slate-900' : 'hover:bg-slate-700'}`}>2. 薪資結算</button>
+                                    <button onClick={() => setActiveTab('print')} className={`px-4 py-2 rounded-md text-sm font-bold transition-colors ${activeTab === 'print' ? 'bg-yellow-500 text-slate-900' : 'hover:bg-slate-700'}`}>3. 列印薪資單</button>
+                                </div>
+                            </div>
+                        </div>
+                    </nav>
+
+                    <main className="max-w-7xl mx-auto p-4 md:p-8 print-block print:p-0 print:max-w-none">
+                        
+                        {/* Tab 1: 員工設定 */}
+                        {activeTab === 'employees' && (
+                            <div className="space-y-6 animate-fade-in">
+                                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                                    <div className="flex justify-between items-center mb-6">
+                                        <h2 className="text-2xl font-bold flex items-center text-slate-800"><Icons.Users className="w-6 h-6 mr-2 text-blue-600" /> 員工設定</h2>
+                                        <div className="flex space-x-3">
+                                            <button onClick={clearAllData} className="flex items-center text-red-600 border border-red-200 px-3 py-2 rounded hover:bg-red-50"><Icons.RefreshCw className="w-4 h-4 mr-1" /> 清空</button>
+                                            <button onClick={() => { setEditingEmp(null); setIsEmpModalOpen(true); }} className="flex items-center bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 font-bold"><Icons.Plus className="w-4 h-4 mr-1" /> 新增</button>
+                                        </div>
+                                    </div>
+                                    {employees.length === 0 ? (
+                                        <div className="text-center py-12 bg-slate-50 border border-dashed rounded text-slate-500">無資料，請匯入 Excel 或手動新增。</div>
+                                    ) : (
+                                        <div className="overflow-x-auto rounded-lg border border-slate-200">
+                                            <table className="min-w-full divide-y divide-slate-200 text-sm">
+                                                <thead className="bg-slate-50">
+                                                    <tr>
+                                                        <th className="px-4 py-3 text-left font-bold text-slate-600">編號</th>
+                                                        <th className="px-4 py-3 text-left font-bold text-slate-600">姓名</th>
+                                                        <th className="px-4 py-3 text-left font-bold text-slate-600">職稱</th>
+                                                        <th className="px-4 py-3 text-right font-bold text-slate-600">基本底薪</th>
+                                                        <th className="px-4 py-3 text-right font-bold text-slate-600">勞保自付</th>
+                                                        <th className="px-4 py-3 text-right font-bold text-slate-600">健保自付</th>
+                                                        <th className="px-4 py-3 text-center font-bold text-slate-600">操作</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="bg-white divide-y divide-slate-100">
+                                                    {employees.map(emp => (
+                                                        <tr key={emp.id} className="hover:bg-slate-50 transition-colors">
+                                                            <td className="px-4 py-3 font-mono text-slate-600">{emp.empId}</td>
+                                                            <td className="px-4 py-3 font-bold text-slate-800">{emp.name}</td>
+                                                            <td className="px-4 py-3 text-slate-500">{emp.title}</td>
+                                                            <td className="px-4 py-3 text-right font-bold text-blue-700">${emp.baseSalary.toLocaleString()}</td>
+                                                            <td className="px-4 py-3 text-right text-red-600">-${emp.laborFee}</td>
+                                                            <td className="px-4 py-3 text-right text-red-600">-${emp.healthFee}</td>
+                                                            <td className="px-4 py-3 text-center space-x-2">
+                                                                <button onClick={() => { setEditingEmp(emp); setIsEmpModalOpen(true); }} className="text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 p-1.5 rounded transition"><Icons.Settings className="w-4 h-4" /></button>
+                                                                <button onClick={() => deleteEmployee(emp.id)} className="text-red-600 hover:text-red-800 bg-red-50 hover:bg-red-100 p-1.5 rounded transition"><Icons.Trash2 className="w-4 h-4" /></button>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Tab 2: 薪資結算 */}
+                        {activeTab === 'input' && (
+                            <div className="space-y-6 animate-fade-in">
+                                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                                    <div className="flex flex-col md:flex-row justify-between mb-6 gap-4">
+                                        <h2 className="text-2xl font-bold flex items-center text-slate-800"><Icons.Clock className="w-6 h-6 mr-2 text-green-600" /> 月份結算</h2>
+                                        <div className="flex items-center space-x-4 bg-slate-50 p-2 rounded-lg">
+                                            <input type="month" value={currentPeriod} onChange={(e) => setCurrentPeriod(e.target.value)} className="border border-slate-300 rounded px-2 py-1 bg-white" />
+                                            <button onClick={() => setIsImportModalOpen(true)} className="flex items-center bg-emerald-600 text-white px-3 py-2 rounded hover:bg-emerald-700 font-medium"><Icons.FileSpreadsheet className="w-4 h-4 mr-1" /> 匯入總表</button>
+                                        </div>
+                                    </div>
+
+                                    {/* 顯眼的大型匯入區塊 */}
+                                    {!hasDataForCurrentMonth && employees.length > 0 && (
+                                        <div 
+                                            onClick={() => setIsImportModalOpen(true)}
+                                            className="cursor-pointer mb-6 p-10 dashed-border rounded-xl bg-blue-50 hover:bg-blue-100 transition flex flex-col items-center justify-center text-blue-500"
+                                            style={{border: '3px dashed #93C5FD'}}
+                                        >
+                                            <Icons.FileSpreadsheet className="w-16 h-16 mb-4 text-blue-400" />
+                                            <h3 className="text-xl font-bold text-blue-700">尚未匯入本月資料</h3>
+                                            <p className="text-blue-600 mt-2">點擊此處上傳 Excel 總表 (支援 .xlsx / .csv)</p>
+                                        </div>
+                                    )}
+
+                                    <div className="overflow-x-auto rounded-lg border border-slate-200">
+                                        <table className="min-w-full divide-y divide-slate-200 text-sm">
+                                            <thead className="bg-slate-50">
+                                                <tr>
+                                                    <th className="px-3 py-4 text-left font-bold text-slate-600">員工</th>
+                                                    <th className="px-2 py-4 text-left font-bold text-blue-700 bg-blue-50/50">加班(H)</th>
+                                                    <th className="px-2 py-4 text-left font-bold text-red-700 bg-red-50/50">扣薪假(H)</th>
+                                                    <th className="px-2 py-4 text-left font-bold text-slate-700 bg-slate-100">特休(H)</th>
+                                                    <th className="px-2 py-4 text-left font-bold text-green-700 bg-green-50/50">獎金</th>
+                                                    <th className="px-2 py-4 text-left font-bold text-orange-700 bg-orange-50/50">扣款(勞健保)</th>
+                                                    <th className="px-3 py-4 text-left font-bold text-slate-600">備註</th>
+                                                    <th className="px-3 py-4 text-right font-bold text-slate-600">實發</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="bg-white divide-y divide-slate-100">
+                                                {fullPayrollList.map((item) => (
+                                                    <tr key={item.id} className="hover:bg-slate-50">
+                                                        <td className="px-3 py-3"><div className="font-bold">{item.name}</div><div className="text-xs text-slate-500">{item.empId}</div></td>
+                                                        <td className="px-2 py-3 bg-blue-50/30"><input type="number" className="w-16 border rounded p-1" value={item.overtimeHours} onChange={(e) => handlePayrollChange(item.id, 'overtimeHours', e.target.value)} /></td>
+                                                        <td className="px-2 py-3 bg-red-50/30"><input type="number" className="w-16 border rounded p-1" value={item.leaveHours} onChange={(e) => handlePayrollChange(item.id, 'leaveHours', e.target.value)} /></td>
+                                                        <td className="px-2 py-3 bg-slate-50"><input type="number" className="w-16 border rounded p-1" value={item.annualLeaveHours} onChange={(e) => handlePayrollChange(item.id, 'annualLeaveHours', e.target.value)} /></td>
+                                                        <td className="px-2 py-3 bg-green-50/30"><input type="number" className="w-20 border rounded p-1" value={item.bonus} onChange={(e) => handlePayrollChange(item.id, 'bonus', e.target.value)} /></td>
+                                                        <td className="px-2 py-3 bg-orange-50/30"><input type="number" className="w-20 border rounded p-1" value={item.deduction} onChange={(e) => handlePayrollChange(item.id, 'deduction', e.target.value)} /></td>
+                                                        <td className="px-3 py-3"><input type="text" className="w-32 border rounded p-1" value={item.note || ''} onChange={(e) => handlePayrollChange(item.id, 'note', e.target.value)} /></td>
+                                                        <td className="px-3 py-3 text-right font-bold text-blue-700">${item.netPay.toLocaleString()}</td>
+                                                    </tr>
+                                                ))}
+                                                {fullPayrollList.length === 0 && (
+                                                    <tr><td colSpan="8" className="text-center py-10 text-slate-400">尚無資料</td></tr>
+                                                )}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'print' && (
+                            <div className="print-block w-full">
+                                <div className="mb-6 flex justify-between items-center bg-white p-4 rounded shadow print-hidden">
+                                    <h2 className="text-xl font-bold">薪資單預覽</h2>
+                                    <button onClick={() => window.print()} className="flex items-center bg-slate-800 text-white px-6 py-3 rounded font-bold"><Icons.Printer className="w-5 h-5 mr-2" /> 列印</button>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 print-grid-2 print-block w-full">
+                                    {fullPayrollList.map((item) => (
+                                        <div key={item.id} className="bg-white border border-slate-400 p-4 shadow-sm print:border-slate-800 print:p-2 flex flex-col justify-between break-inside-avoid" style={{ minHeight: '145px' }}>
+                                            <div className="flex justify-between border-b pb-1 mb-1">
+                                                <div><span className="font-bold text-lg print-text-base">薪資單</span> <span className="text-sm text-slate-500 print-text-xs">({item.period})</span></div>
+                                                <span className="font-bold print-text-base">{item.name} <span className="text-xs font-normal text-slate-400">({item.empId})</span></span>
+                                            </div>
+                                            <div className="bg-slate-100 p-1 mb-1 rounded flex justify-between text-xs print-text-xs text-slate-700 print:bg-slate-200">
+                                                <span>加班: <b className="text-blue-800">{item.overtimeHours}</b>H</span>|
+                                                <span>缺勤: <b className="text-red-800">{item.leaveHours}</b>H</span>|
+                                                <span>特休: <b>{item.annualLeaveHours}</b>H</span>
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-2 text-sm print-text-xs flex-grow">
+                                                <div className="border-r pr-1">
+                                                    <div className="text-[10px] print-text-tiny text-slate-500 font-bold">應發 (+)</div>
+                                                    <div className="flex justify-between"><span>本薪</span><span>{item.baseSalary.toLocaleString()}</span></div>
+                                                    <div className="flex justify-between text-blue-800"><span>加班費</span><span>{item.overtimePay.toLocaleString()}</span></div>
+                                                    <div className="flex justify-between text-green-800"><span>獎金</span><span>{item.bonus.toLocaleString()}</span></div>
+                                                    <div className="border-t mt-1 font-bold flex justify-between"><span>合計</span><span>{item.grossPay.toLocaleString()}</span></div>
+                                                </div>
+                                                <div className="pl-1">
+                                                    <div className="text-[10px] print-text-tiny text-slate-500 font-bold">應扣 (-)</div>
+                                                    <div className="flex justify-between text-red-800"><span>勞健保等</span><span>{item.insuranceFee.toLocaleString()}</span></div>
+                                                    <div className="flex justify-between text-red-800"><span>請假扣</span><span>{item.leaveDeduction.toLocaleString()}</span></div>
+                                                    <div className="border-t mt-1 font-bold flex justify-between"><span>合計</span><span>{item.totalDeduction.toLocaleString()}</span></div>
+                                                </div>
+                                            </div>
+                                            <div className="border-t-2 border-slate-800 mt-1 pt-1 flex justify-between items-end">
+                                                <div className="text-xs text-slate-500 w-2/3 truncate print-text-tiny">{item.note}</div>
+                                                <div className="text-right"><span className="text-[10px] mr-1">實發</span><span className="text-lg font-bold print-text-base">${item.netPay.toLocaleString()}</span></div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {isImportModalOpen && (
+                            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 print-hidden backdrop-blur-sm">
+                                <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl animate-fade-in">
+                                    <div className="p-6">
+                                        <div className="flex justify-between items-center mb-4">
+                                            <h3 className="text-xl font-bold flex items-center text-slate-800"><Icons.Upload className="w-5 h-5 mr-2" /> 匯入總表 Excel</h3>
+                                            <button onClick={() => setIsImportModalOpen(false)} className="text-slate-400 hover:text-slate-600">×</button>
+                                        </div>
+                                        <div className="bg-emerald-50 p-4 rounded-lg mb-4 border border-emerald-100 text-sm text-emerald-800">
+                                            <p className="font-bold mb-2">💡 系統將自動抓取以下欄位 (支援 總表.csv / 總表改.csv)：</p>
+                                            <ul className="list-disc list-inside space-y-1">
+                                                <li><b>員工編號/姓名</b>：自動建立新員工資料。</li>
+                                                <li><b>1.33 / 1.66</b>：自動合併計算為「加班時數」。</li>
+                                                <li><b>勞健保</b>：自動帶入當月扣款金額。</li>
+                                                <li><b>補助</b>：自動帶入獎金。</li>
+                                                <li><b>備註</b>：自動解析 "事假8:00"、"特休8:00" 等文字轉換為時數。</li>
+                                            </ul>
+                                        </div>
+                                        <div className="border-2 border-dashed border-slate-300 rounded-lg p-8 text-center hover:bg-slate-50 relative cursor-pointer">
+                                            <input type="file" ref={fileInputRef} accept=".xlsx, .xls, .csv" onChange={handleFileUpload} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+                                            <Icons.Upload className="w-10 h-10 text-slate-400 mx-auto mb-2" />
+                                            <p className="text-slate-600 font-medium">點擊此處上傳 Excel / CSV 檔案</p>
+                                            <p className="text-slate-400 text-xs mt-1">或將檔案拖曳至此處</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Modal: 員工編輯 (省略部分代碼以節省空間，功能與前版相同) */}
+                        {isEmpModalOpen && (
+                            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 print-hidden backdrop-blur-sm">
+                                <div className="bg-white rounded-xl shadow-xl w-full max-w-md animate-fade-in">
+                                    <div className="p-6">
+                                        <h3 className="text-xl font-bold mb-4">編輯/新增員工</h3>
+                                        <form onSubmit={handleSaveEmployee} className="space-y-4">
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <input name="empId" defaultValue={editingEmp?.empId} placeholder="編號" required className="border p-2 rounded w-full" />
+                                                <input name="name" defaultValue={editingEmp?.name} placeholder="姓名" required className="border p-2 rounded w-full" />
+                                            </div>
+                                            <input name="title" defaultValue={editingEmp?.title} placeholder="職稱" required className="border p-2 rounded w-full" />
+                                            <div className="bg-blue-50 p-2 rounded"><label className="text-xs font-bold text-blue-800">底薪</label><input name="baseSalary" type="number" defaultValue={editingEmp?.baseSalary} required className="w-full border p-1 rounded" /></div>
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div><label className="text-xs">勞保</label><input name="laborFee" type="number" defaultValue={editingEmp?.laborFee||0} className="border p-1 w-full rounded" /></div>
+                                                <div><label className="text-xs">健保</label><input name="healthFee" type="number" defaultValue={editingEmp?.healthFee||0} className="border p-1 w-full rounded" /></div>
+                                            </div>
+                                            <div className="flex justify-end space-x-2 pt-4">
+                                                <button type="button" onClick={() => setIsEmpModalOpen(false)} className="px-3 py-1 border rounded">取消</button>
+                                                <button type="submit" className="px-3 py-1 bg-blue-600 text-white rounded">儲存</button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                    </main>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<PayrollApp />);
+    </script>
+</body>
+</html>
