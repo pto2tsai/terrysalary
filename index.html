@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>薪資管理系統 (V26 - 旗艦修復版)</title>
+    <title>薪資管理系統 (V27 - 專業美學版)</title>
     
     <!-- 1. 引入樣式與核心庫 -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -49,49 +49,100 @@
                 display: grid !important;
                 grid-template-columns: 1fr 1fr;
                 grid-template-rows: 1fr 1fr;
-                gap: 4mm;
+                gap: 8mm 5mm; /* 增加垂直間距 */
             }
 
-            /* 薪資單設計 */
+            /* 薪資單設計 (Professional Look) */
             .payroll-slip {
-                border: 3px double #000 !important; /* 雙線邊框，更有質感 */
-                padding: 10px !important;
+                border: 2px solid #000 !important; 
+                padding: 15px !important;
                 box-sizing: border-box;
                 display: flex;
                 flex-direction: column;
-                justify-content: space-between;
-                height: 135mm; /* 固定高度 */
+                justify-content: flex-start;
+                height: 138mm; /* 固定高度 */
                 break-inside: avoid;
                 page-break-inside: avoid;
+                position: relative;
             }
 
-            /* 字體強制設定 (黑字、加粗) */
-            .print-title { font-size: 20px !important; font-weight: 900 !important; text-align: center; border-bottom: 2px solid #000; padding-bottom: 5px; margin-bottom: 5px; }
-            .print-row { display: flex; justify-content: space-between; align-items: baseline; line-height: 1.4; }
-            .print-label { font-size: 12px !important; font-weight: 600 !important; color: #333 !important; }
-            .print-value { font-size: 14px !important; font-weight: 800 !important; font-family: Consolas, monospace; }
-            .print-section-header { font-size: 14px !important; font-weight: 800 !important; border-bottom: 1px dashed #666; margin-bottom: 3px; margin-top: 3px; }
-            .print-net-label { font-size: 16px !important; font-weight: 800 !important; }
-            .print-net-value { font-size: 28px !important; font-weight: 900 !important; border-bottom: 3px double #000; }
+            /* 標題區 */
+            .slip-header {
+                border-bottom: 3px double #000;
+                margin-bottom: 10px;
+                padding-bottom: 5px;
+                text-align: center;
+            }
+            .slip-title { font-size: 22px !important; font-weight: 900 !important; letter-spacing: 1px; }
+            .slip-subtitle { font-size: 12px !important; margin-top: 2px; }
+
+            /* 人員資訊 */
+            .emp-info {
+                display: flex;
+                justify-content: space-between;
+                align-items: baseline;
+                margin-bottom: 8px;
+                font-weight: 700;
+                font-size: 16px;
+                border-bottom: 1px solid #ccc;
+                padding-bottom: 5px;
+            }
+
+            /* 內容網格 */
+            .slip-body {
+                display: grid;
+                grid-template-columns: 1fr 1px 1fr; /* 左欄 分隔線 右欄 */
+                gap: 10px;
+                flex-grow: 1;
+            }
+            .divider { background-color: #ccc; height: 100%; }
+
+            /* 項目行 */
+            .item-row {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 3px;
+                line-height: 1.3;
+            }
+            .item-label { font-size: 12px !important; color: #333; font-weight: 600; }
+            .item-value { font-size: 13px !important; font-weight: 700; font-family: Consolas, monospace; text-align: right; }
             
-            /* 隱藏 Scrollbar */
-            ::-webkit-scrollbar { display: none; }
+            .section-title {
+                font-size: 13px;
+                font-weight: 900;
+                text-decoration: underline;
+                margin-bottom: 5px;
+                color: #000;
+            }
+
+            /* 底部總結 */
+            .slip-footer {
+                margin-top: auto;
+                border-top: 3px double #000;
+                padding-top: 10px;
+            }
+            .footer-row {
+                display: flex;
+                justify-content: space-between;
+                align-items: flex-end;
+            }
+            .footer-info { font-size: 10px; color: #555; line-height: 1.4; width: 60%; }
+            .net-pay-label { font-size: 16px; font-weight: 800; margin-right: 10px; }
+            .net-pay-value { font-size: 28px; font-weight: 900; font-family: Consolas, monospace; }
         }
 
-        /* 螢幕預覽模式 (Screen Preview) */
-        .screen-only-preview {
+        /* 螢幕預覽模式 */
+        .screen-preview-container {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
             gap: 20px;
-            padding: 10px;
         }
-        .screen-only-preview .payroll-slip {
+        .screen-preview-container .payroll-slip {
             background: white;
-            border: 3px double #cbd5e1;
-            padding: 15px;
-            border-radius: 4px;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-            min-height: 400px;
+            border: 1px solid #ccc;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         }
         
         .animate-fade-in { animation: fadeIn 0.3s ease-in-out; }
@@ -103,6 +154,7 @@
     <!-- 2. 全域錯誤攔截 -->
     <script>
         window.onerror = function(msg, url, line, col, error) {
+            document.getElementById('loading-screen').style.display = 'none';
             const errorBox = document.getElementById('error-display');
             if (errorBox) {
                 errorBox.style.display = 'flex';
@@ -180,7 +232,16 @@
 
         // 數值安全格式化 (避免 NaN)
         const formatNumber = (num) => {
-            return (Number(num) || 0).toLocaleString();
+            const n = Number(num);
+            return isNaN(n) ? "0" : n.toLocaleString();
+        };
+
+        // 取得標題日期
+        const getTitle = (period) => {
+            if (!period) return "";
+            const parts = period.split('-');
+            if (parts.length < 2) return period;
+            return `${parts[0]}年${parts[1]}月`;
         };
 
         const PayrollApp = () => {
@@ -230,7 +291,7 @@
             };
             const excelTimeToString = (val) => { if (typeof val === 'number') { const t = val * 24; const h = Math.floor(t); const m = Math.round((t - h) * 60); return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`; } return formatInputTime(val); };
 
-            // Core Calculation
+            // --- 核心計算邏輯 ---
             const calculateSalary = (emp, data) => {
                 if (!emp) return null;
                 const d = data || {};
@@ -385,7 +446,6 @@
                 const exportData = fullPayrollList.map((item, index) => ({ '序號': index + 1, '部門': item.department || '', '員工編號': item.empId, '姓名': item.name, '職稱': item.title, '基本底薪': item.baseSalary, '加班費合計': item.payWt034 + item.payWt067 + item.payHd134 + item.payHd167 + item.payEarly + item.payNoLunch + item.payHolidayOT, '特休時數': item.annualLeave, '各項津貼': item.lunchAllowance + item.businessBonus + item.otherBonus, '應發金額': item.grossPay, '勞健保': item.insuranceFee, '請假扣款': item.dedSick + item.dedPersonal + item.dedAbsence, '應扣金額': item.finalDeduction, '實發金額': item.netPay, '簽名/蓋章': '' }));
                 const ws = XLSX.utils.json_to_sheet(exportData); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "薪資印領清冊"); XLSX.writeFile(wb, `薪資印領清冊_${currentPeriod}.xlsx`);
             };
-            const getTitle = () => { const [y, m] = (currentPeriod||"").split('-'); return `${y}年${m}月`; };
 
             // Mobile Components
             const MobileNav = () => (
@@ -410,7 +470,7 @@
                     {/* Desktop Header */}
                     <nav className="bg-slate-800 text-white shadow-lg print-hidden sticky top-0 z-40 hidden md:block">
                         <div className="max-w-7xl mx-auto px-4 flex justify-between h-16 items-center">
-                            <div className="flex items-center space-x-2"><Icons.Calculator className="w-6 h-6 text-yellow-400"/><span className="font-bold text-xl">薪資管理系統 V26</span></div>
+                            <div className="flex items-center space-x-2"><Icons.Calculator className="w-6 h-6 text-yellow-400"/><span className="font-bold text-xl">薪資管理系統 V27</span></div>
                             <div className="flex space-x-2">
                                 <button onClick={()=>setActiveTab('employees')} className={`px-3 py-1 rounded ${activeTab==='employees'?'bg-yellow-500 text-black':'hover:bg-slate-700'}`}>員工設定</button>
                                 <button onClick={()=>setActiveTab('input')} className={`px-3 py-1 rounded ${activeTab==='input'?'bg-yellow-500 text-black':'hover:bg-slate-700'}`}>薪資結算</button>
@@ -521,9 +581,9 @@
                             </div>
                         )}
 
-                        {/* 3. 列印預覽 (Screen + Print) */}
+                        {/* 3. 列印 Tab (Screen Preview & Print Block) */}
                         {activeTab === 'print' && (
-                            <div className="print-block space-y-4">
+                            <div className="print-block space-y-4 screen-only-preview">
                                 <div className="bg-white p-4 rounded shadow print-hidden">
                                     <h2 className="text-lg font-bold mb-2">報表預覽</h2>
                                     <p className="text-sm text-gray-500 mb-4">此為預覽畫面。請按下「列印薪資單」以輸出正式格式。</p>
@@ -534,55 +594,64 @@
                                 </div>
                                 
                                 {/* 這裡有一個專門的 Print Container */}
-                                <div id="print-container" className="screen-only-preview">
+                                <div id="print-container">
                                     {fullPayrollList.map(item => (
                                         <div key={item.id} className="payroll-slip">
-                                            <div className="print-title">{getTitle()} 薪資單</div>
-                                            <div className="print-row" style={{borderBottom:'2px solid #000', paddingBottom:'5px', marginBottom:'8px'}}>
-                                                <span className="text-emp">{item.name} <span className="text-sm font-normal">({item.empId})</span></span>
-                                                <span className="print-label">{item.department}</span>
+                                            <div className="slip-header">
+                                                <div className="slip-title">{getTitle(currentPeriod)} 薪資單</div>
+                                            </div>
+                                            
+                                            <div className="emp-info">
+                                                <span>{item.name} <span style={{fontSize:'12px', fontWeight:'normal'}}>({item.empId})</span></span>
+                                                <span style={{fontSize:'14px'}}>{item.department}</span>
                                             </div>
 
-                                            <div style={{display:'flex', gap:'15px', flexGrow:1}}>
-                                                <div style={{width:'50%', borderRight:'2px dashed #999', paddingRight:'8px'}}>
-                                                    <div className="print-section-header">應發項目 (+)</div>
-                                                    <div className="print-row"><span className="print-label">底薪</span><span className="print-value">${formatNumber(item.baseSalary)}</span></div>
-                                                    {item.payWt034 > 0 && <div className="print-row"><span className="print-label">平加0.34</span><span className="print-value">{item.payWt034}</span></div>}
-                                                    {item.payWt067 > 0 && <div className="print-row"><span className="print-label">平加0.67</span><span className="print-value">{item.payWt067}</span></div>}
-                                                    {item.payHd134 > 0 && <div className="print-row"><span className="print-label">例加1.34</span><span className="print-value">{item.payHd134}</span></div>}
-                                                    {item.payHd167 > 0 && <div className="print-row"><span className="print-label">例加1.67</span><span className="print-value">{item.payHd167}</span></div>}
-                                                    {item.payEarly > 0 && <div className="print-row"><span className="print-label">提早</span><span className="print-value">{item.payEarly}</span></div>}
-                                                    {item.payNoLunch > 0 && <div className="print-row"><span className="print-label">未休</span><span className="print-value">{item.payNoLunch}</span></div>}
-                                                    {item.payHolidayOT > 0 && <div className="print-row"><span className="print-label">休加</span><span className="print-value">{item.payHolidayOT}</span></div>}
-                                                    {item.lunchAllowance > 0 && <div className="print-row"><span className="print-label">午餐津貼</span><span className="print-value">{item.lunchAllowance}</span></div>}
-                                                    {item.businessBonus > 0 && <div className="print-row"><span className="print-label">業務加給</span><span className="print-value">{item.businessBonus}</span></div>}
-                                                    {item.otherBonus > 0 && <div className="print-row"><span className="print-label">其它</span><span className="print-value">{item.otherBonus}</span></div>}
-                                                    <div className="print-total print-row"><span className="text-total-label">應發合計</span><span className="text-total-value">${formatNumber(item.grossPay)}</span></div>
+                                            <div className="slip-body">
+                                                {/* 左欄：應發項目 */}
+                                                <div>
+                                                    <div className="section-title">應發項目 (+)</div>
+                                                    <div className="item-row"><span className="item-label">基本底薪</span><span className="item-value">${formatNumber(item.baseSalary)}</span></div>
+                                                    {item.payWt034 > 0 && <div className="item-row"><span className="item-label">平日加班(0.34)</span><span className="item-value">${formatNumber(item.payWt034)}</span></div>}
+                                                    {item.payWt067 > 0 && <div className="item-row"><span className="item-label">平日加班(0.67)</span><span className="item-value">${formatNumber(item.payWt067)}</span></div>}
+                                                    {item.payHd134 > 0 && <div className="item-row"><span className="item-label">例假加班(1.34)</span><span className="item-value">${formatNumber(item.payHd134)}</span></div>}
+                                                    {item.payHd167 > 0 && <div className="item-row"><span className="item-label">例假加班(1.67)</span><span className="item-value">${formatNumber(item.payHd167)}</span></div>}
+                                                    {item.payEarly > 0 && <div className="item-row"><span className="item-label">提早上班</span><span className="item-value">${formatNumber(item.payEarly)}</span></div>}
+                                                    {item.payNoLunch > 0 && <div className="item-row"><span className="item-label">中午未休</span><span className="item-value">${formatNumber(item.payNoLunch)}</span></div>}
+                                                    {item.payHolidayOT > 0 && <div className="item-row"><span className="item-label">休假加班</span><span className="item-value">${formatNumber(item.payHolidayOT)}</span></div>}
+                                                    {item.lunchAllowance > 0 && <div className="item-row"><span className="item-label">午餐津貼</span><span className="item-value">${formatNumber(item.lunchAllowance)}</span></div>}
+                                                    {item.businessBonus > 0 && <div className="item-row"><span className="item-label">業務加給</span><span className="item-value">${formatNumber(item.businessBonus)}</span></div>}
+                                                    {item.otherBonus > 0 && <div className="item-row"><span className="item-label">其它加項</span><span className="item-value">${formatNumber(item.otherBonus)}</span></div>}
+                                                    <div style={{borderTop:'2px solid #000', marginTop:'5px', paddingTop:'2px', display:'flex', justifyContent:'space-between', fontWeight:'bold'}}><span>應發合計</span><span>${formatNumber(item.grossPay)}</span></div>
                                                 </div>
 
-                                                <div style={{width:'50%', paddingLeft:'8px'}}>
-                                                    <div className="print-section-header">應扣項目 (-)</div>
-                                                    <div className="print-row"><span className="print-label">勞健保</span><span className="print-value text-red-700">{item.insuranceFee}</span></div>
-                                                    {item.dedAbsence > 0 && <div className="print-row"><span className="print-label">缺勤扣款</span><span className="print-value text-red-700">{item.dedAbsence}</span></div>}
-                                                    {item.dedSick > 0 && <div className="print-row"><span className="print-label">病假扣款</span><span className="print-value text-red-700">{item.dedSick}</span></div>}
-                                                    {item.dedPersonal > 0 && <div className="print-row"><span className="print-label">事假扣款</span><span className="print-value text-red-700">{item.dedPersonal}</span></div>}
-                                                    <div className="print-total print-row" style={{color:'red'}}><span className="text-total-label">應扣合計</span><span className="text-total-value text-red-700">${formatNumber(item.finalDeduction)}</span></div>
+                                                <div className="divider"></div>
+
+                                                {/* 右欄：應扣項目 */}
+                                                <div>
+                                                    <div className="section-title">應扣項目 (-)</div>
+                                                    <div className="item-row"><span className="item-label">勞健保費</span><span className="item-value text-red-700">${formatNumber(item.insuranceFee)}</span></div>
+                                                    {item.dedAbsence > 0 && <div className="item-row"><span className="item-label">缺勤扣款</span><span className="item-value text-red-700">${formatNumber(item.dedAbsence)}</span></div>}
+                                                    {item.dedSick > 0 && <div className="item-row"><span className="item-label">病假扣款</span><span className="item-value text-red-700">${formatNumber(item.dedSick)}</span></div>}
+                                                    {item.dedPersonal > 0 && <div className="item-row"><span className="item-label">事假扣款</span><span className="item-value text-red-700">${formatNumber(item.dedPersonal)}</span></div>}
+                                                    
+                                                    <div style={{borderTop:'2px solid #000', marginTop:'5px', paddingTop:'2px', display:'flex', justifyContent:'space-between', fontWeight:'bold', color:'red'}}><span>應扣合計</span><span>${formatNumber(item.finalDeduction)}</span></div>
                                                 </div>
                                             </div>
 
-                                            <div style={{marginTop:'10px', borderTop:'3px double black', paddingTop:'5px'}}>
-                                                <div className="print-row">
-                                                    <div style={{fontSize:'11px', color:'#444', lineHeight:'1.3', width:'60%'}}>
+                                            {/* 底部區 */}
+                                            <div className="slip-footer">
+                                                <div className="footer-row">
+                                                    <div className="footer-info">
+                                                        <p style={{fontWeight:'bold', marginBottom:'2px'}}>感謝您本月的辛勞！</p>
                                                         工時:{item.actualWorkHours} / 應勤:{item.expectedHours}H<br/>
                                                         特休:{item.annualLeave} | 喪假:{item.bereavementLeave}<br/>
                                                         備註:{item.note}
                                                     </div>
                                                     <div style={{textAlign:'right'}}>
-                                                        <span className="print-net-label mr-2">實發</span>
-                                                        <span className="print-net-pay">${formatNumber(item.netPay)}</span>
+                                                        <span className="net-pay-label">實發金額</span>
+                                                        <div className="print-net-value">${formatNumber(item.netPay)}</div>
                                                     </div>
                                                 </div>
-                                                <div style={{textAlign:'center', fontSize:'12px', marginTop:'8px', fontWeight:'bold'}}>感謝您本月的辛勞！</div>
                                             </div>
                                         </div>
                                     ))}
@@ -619,7 +688,7 @@
                             </div>
                         )}
                         
-                        {/* Other Modals */}
+                        {/* Other Modals - Same as V22 (Hidden for brevity but functional) */}
                         {isImportModalOpen && <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 print-hidden"><div className="bg-white p-6 rounded shadow-xl w-full max-w-lg"><h3 className="font-bold text-lg mb-4">匯入 Excel</h3><input type="file" ref={fileInputRef} accept=".xlsx,.csv" onChange={handleExcel} className="border p-2 w-full"/><button onClick={()=>setIsImportModalOpen(false)} className="mt-4 px-4 py-2 bg-gray-200 rounded">關閉</button></div></div>}
                         {isEmpModalOpen && <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 print-hidden"><div className="bg-white p-6 rounded shadow-xl w-full max-w-sm"><h3 className="font-bold text-lg mb-4">編輯員工</h3><form onSubmit={handleSaveEmployee} className="space-y-3"><input name="empId" defaultValue={editingEmp?.empId} placeholder="ID" className="border p-2 w-full"/><input name="name" defaultValue={editingEmp?.name} placeholder="姓名" className="border p-2 w-full"/><input name="title" defaultValue={editingEmp?.title} placeholder="職位" className="border p-2 w-full"/><input name="department" defaultValue={editingEmp?.department} placeholder="部門" className="border p-2 w-full"/><input name="baseSalary" type="number" defaultValue={editingEmp?.baseSalary} placeholder="底薪" className="border p-2 w-full"/><div className="flex justify-end gap-2"><button type="button" onClick={()=>setIsEmpModalOpen(false)} className="px-3 py-1 border rounded">取消</button><button className="px-3 py-1 bg-blue-600 text-white rounded">儲存</button></div></form></div></div>}
                         {isBulkModalOpen && <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 print-hidden"><div className="bg-white p-6 rounded shadow-xl w-full max-w-sm"><h3 className="font-bold text-lg mb-4">批量調薪</h3><form onSubmit={handleBulkSubmit} className="space-y-3"><input type="number" value={bulkTargetSalary} onChange={e=>setBulkTargetSalary(e.target.value)} className="border p-2 w-full" placeholder="新底薪"/><div className="flex justify-end gap-2"><button type="button" onClick={()=>setIsBulkModalOpen(false)} className="px-3 py-1 border rounded">取消</button><button className="px-3 py-1 bg-orange-600 text-white rounded">執行</button></div></form></div></div>}
