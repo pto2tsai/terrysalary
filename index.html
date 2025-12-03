@@ -1,9 +1,9 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>薪資管理系統 (V34 - 專業旗艦版)</title>
+    <title>薪資管理系統 (V34.2 - 最終版)</title>
     
     <!-- 1. 引入樣式與核心庫 -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -37,27 +37,28 @@
 
     <style>
         /* 基礎樣式 */
-        body { background-color: #525252; /* 深色背景突顯預覽 */ color: #1f2937; font-family: "Microsoft JhengHei", "Heiti TC", sans-serif; -webkit-tap-highlight-color: transparent; }
+        body { background-color: #525252; color: #1f2937; font-family: "Microsoft JhengHei", "Heiti TC", sans-serif; -webkit-tap-highlight-color: transparent; }
         input, select, button { touch-action: manipulation; }
         .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
 
         /* --- 薪資單卡片樣式 (共用) --- */
         .payroll-slip-style {
             background: white;
-            border: 3px double #000;
-            padding: 20px;
+            border: 3px double #000; /* 專業雙線邊框 */
+            padding: 15px;
             box-sizing: border-box;
             display: flex;
             flex-direction: column;
             justify-content: space-between;
             color: #000;
             position: relative;
+            width: 100%;
         }
 
         /* 字體與排版設定 (加大 20% + 左右對齊) */
         .slip-title { 
             font-size: 30px !important; 
-            font-weight: 900; 
+            font-weight: 900 !important; 
             text-align: center; 
             border-bottom: 3px solid #000; 
             margin-bottom: 8px; 
@@ -73,21 +74,22 @@
             padding-bottom: 6px;
             margin-bottom: 10px;
         }
-        .emp-name { font-size: 26px; font-weight: 900; }
-        .emp-id { font-size: 16px; font-weight: 500; margin-left: 8px; }
-        .emp-dept { font-size: 18px; font-weight: 700; }
+        .emp-name { font-size: 26px !important; font-weight: 900 !important; }
+        .emp-id { font-size: 16px !important; font-weight: 600; margin-left: 8px; }
+        .emp-dept { font-size: 20px !important; font-weight: 800; }
 
+        /* 核心二欄式佈局 */
         .body-grid { 
             display: grid; 
-            grid-template-columns: 1fr 1px 1fr; /* 左右二欄 + 分隔線 */
-            gap: 20px; 
+            grid-template-columns: 1fr 1px 1fr; /* 左(加項) | 線 | 右(減項) */
+            gap: 15px; 
             flex-grow: 1; 
         }
         .body-divider { background-color: #000; width: 1px; height: 100%; }
 
         .section-title { 
-            font-size: 18px; 
-            font-weight: 900; 
+            font-size: 18px !important; 
+            font-weight: 900 !important; 
             text-decoration: underline; 
             margin-bottom: 8px; 
             text-align: center;
@@ -101,10 +103,10 @@
             line-height: 1.4; 
             margin-bottom: 2px;
         }
-        .item-label { font-size: 16px; font-weight: 700; text-align: left; }
-        .item-value { font-size: 18px; font-weight: 800; font-family: Consolas, monospace; text-align: right; }
+        .item-label { font-size: 16px !important; font-weight: 700; text-align: left; }
+        .item-value { font-size: 18px !important; font-weight: 800 !important; font-family: Consolas, monospace; text-align: right; }
         
-        /* 合計與實發 */
+        /* 合計行 */
         .subtotal-row {
             border-top: 2px solid #000;
             margin-top: 8px;
@@ -112,7 +114,7 @@
             display: flex;
             justify-content: space-between;
             font-weight: 900;
-            font-size: 18px;
+            font-size: 18px !important;
         }
 
         .footer {
@@ -123,42 +125,49 @@
             justify-content: space-between;
             align-items: flex-end;
         }
-        .footer-left { font-size: 14px; font-weight: 600; line-height: 1.4; width: 60%; }
+        .footer-left { font-size: 14px !important; font-weight: 600; line-height: 1.4; width: 60%; }
         .footer-right { text-align: right; width: 40%; }
         
-        .net-pay-label { font-size: 22px; font-weight: 800; margin-right: 8px; }
+        .net-pay-label { font-size: 22px !important; font-weight: 800; margin-right: 10px; }
         .net-pay-value { 
-            font-size: 42px; /* 超大 */
+            font-size: 42px !important; /* 超大實發金額 */
             font-weight: 900; 
             font-family: Consolas, monospace; 
             border-bottom: 6px double #000; 
             line-height: 1;
         }
 
-        /* --- 螢幕預覽專用 (電腦版：2 欄卡片) --- */
+        /* --- 螢幕預覽專用 --- */
         @media screen {
             #print-container {
                 display: grid;
-                grid-template-columns: 1fr; /* 手機預設 1 欄 */
                 gap: 25px;
                 padding: 20px;
                 max-width: 1200px;
                 margin: 0 auto;
             }
+            /* 電腦版 2 欄 */
             @media (min-width: 1024px) {
                 #print-container {
-                    grid-template-columns: 1fr 1fr; /* 電腦版改為 2 欄，模擬 A4 左右 */
+                    grid-template-columns: 1fr 1fr; 
+                }
+            }
+            /* 手機版 1 欄 */
+            @media (max-width: 1023px) {
+                #print-container {
+                    grid-template-columns: 1fr;
                 }
             }
             .payroll-slip-style {
-                min-height: 550px;
+                min-height: 550px; 
+                box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
                 border-radius: 4px;
             }
         }
 
         /* --- 列印樣式 (A4 4張 滿版) --- */
         @media print {
-            @page { size: A4; margin: 4mm; }
+            @page { size: A4; margin: 4mm; } /* 極窄邊距 */
             body { background-color: white; margin: 0; padding: 0; }
             body * { visibility: hidden; }
             #print-container, #print-container * { visibility: visible; }
@@ -169,12 +178,18 @@
                 display: grid !important;
                 grid-template-columns: 1fr 1fr !important; 
                 grid-template-rows: 1fr 1fr !important;
-                gap: 6mm 8mm !important;
+                gap: 6mm 8mm !important; /* 調整間距 */
                 align-content: center; 
             }
             
-            .payroll-slip-style {
-                height: 142mm !important; /* A4 一半高度減邊距，確保滿版 */
+            .payroll-slip {
+                border: 3px double #000 !important; 
+                padding: 15px !important;
+                box-sizing: border-box; 
+                display: flex; 
+                flex-direction: column;
+                justify-content: flex-start; 
+                height: 142mm !important; /* 精確計算填滿 A4 */
                 width: 100% !important;
                 box-shadow: none !important;
                 margin: 0 !important;
@@ -213,31 +228,31 @@
           appId: "1:556461050986:web:7a8f13d3d9adb5f77d0e13"
         };
 
-        // 2. Global Helper Functions
-        const formatNumber = (num) => {
+        // 2. Global Helper Functions (Fixed Scope Issues)
+        function formatNumber(num) {
             if (num === undefined || num === null || num === '') return '0';
             const n = Number(num);
             return isNaN(n) ? "0" : n.toLocaleString();
-        };
+        }
 
-        const getTitle = (period) => {
+        function getTitle(period) {
             if (!period) return "";
             const parts = period.split('-');
             if (parts.length < 2) return period;
             return `${parts[0]}年${parts[1]}月`;
-        };
+        }
         
-        const safeNum = (val) => { const num = Number(val); return isNaN(num) ? 0 : num; };
-        const timeStrToHours = (str) => { if (!str) return 0; const [h, m] = String(str).split(':').map(Number); return (safeNum(h)) + (safeNum(m))/60; };
-        const hoursToTimeStr = (hours) => { if (!hours && hours !== 0) return "00:00"; const h = Math.floor(hours); const m = Math.round((hours - h) * 60); return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`; };
-        const formatInputTime = (val) => {
+        function safeNum(val) { const num = Number(val); return isNaN(num) ? 0 : num; }
+        function timeStrToHours(str) { if (!str) return 0; const [h, m] = String(str).split(':').map(Number); return (safeNum(h)) + (safeNum(m))/60; }
+        function hoursToTimeStr(hours) { if (!hours && hours !== 0) return "00:00"; const h = Math.floor(hours); const m = Math.round((hours - h) * 60); return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`; }
+        function formatInputTime(val) {
             if(!val) return "00:00"; val = String(val).trim();
             if (val.includes('.')) { const num = parseFloat(val); const h = Math.floor(num); const m = Math.round((num - h) * 60); return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`; }
             if (!val.includes(':')) { if (val.length <= 2) return `${val.padStart(2,'0')}:00`; if (val.length === 3) return `0${val[0]}:${val.substring(1)}`; if (val.length === 4) return `${val.substring(0,2)}:${val.substring(2)}`; }
             const parts = val.split(':'); return `${String(parseInt(parts[0])||0).padStart(2,'0')}:${String(parseInt(parts[1])||0).padStart(2,'0')}`;
-        };
-        const excelTimeToString = (val) => { if (typeof val === 'number') { const t = val * 24; const h = Math.floor(t); const m = Math.round((t - h) * 60); return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`; } return formatInputTime(val); };
-        const parseLeave = (note) => {
+        }
+        function excelTimeToString(val) { if (typeof val === 'number') { const t = val * 24; const h = Math.floor(t); const m = Math.round((t - h) * 60); return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`; } return formatInputTime(val); }
+        function parseLeave(note) {
             let sick=0, personal=0, annual=0, bereavement=0;
             if (!note) return { sick: "00:00", personal: "00:00", annual: "00:00", bereavement: "00:00" };
             const str = note.toString();
@@ -245,10 +260,10 @@
             sick = parseMatch(/(病假)\s*(\d+)([:\.](\d+))?/); personal = parseMatch(/(事假|曠職|扣薪|颱風)\s*(\d+)([:\.](\d+))?/);
             annual = parseMatch(/(特休|年假)\s*(\d+)([:\.](\d+))?/); bereavement = parseMatch(/(喪假)\s*(\d+)([:\.](\d+))?/);
             return { sick: hoursToTimeStr(sick), personal: hoursToTimeStr(personal), annual: hoursToTimeStr(annual), bereavement: hoursToTimeStr(bereavement) };
-        };
-        
-        // 3. Salary Calculation (External)
-        const calculateSalary = (emp, data) => {
+        }
+
+        // 3. Salary Calculation (Placed OUTSIDE to ensure availability)
+        function calculateSalary(emp, data) {
             if (!emp) return null;
             const d = data || {};
             const hourlyRate = Math.round(safeNum(emp.baseSalary) / 240);
@@ -278,9 +293,9 @@
             let insuranceFee = d.hasImportedInsurance ? safeNum(d.deduction) : (safeNum(emp.laborFee) + safeNum(emp.healthFee));
             let finalDeduction = dedSick + dedPersonal + dedAbsence + insuranceFee + (d.hasImportedInsurance ? 0 : safeNum(d.deduction));
             return { hourlyRate, payWt034, payWt067, payHd134, payHd167, payEarly, payNoLunch, payHolidayOT, dedSick, dedPersonal, dedAbsence, absenceHoursStr: hoursToTimeStr(absenceHoursVal), expectedHours, totalAdditions, finalDeduction, netPay: grossPay - finalDeduction, insuranceFee, grossPay };
-        };
+        }
         
-        // 4. Icons
+        // 5. Icons
         const Icons = {
             Calculator: (p)=><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><rect width="16" height="20" x="4" y="2" rx="2"/><line x1="8" x2="16" y1="6" y2="6"/><line x1="16" x2="16" y1="14" y2="18"/><path d="M16 10h.01"/><path d="M12 10h.01"/><path d="M8 10h.01"/><path d="M12 14h.01"/><path d="M8 14h.01"/><path d="M12 18h.01"/><path d="M8 18h.01"/></svg>,
             Users: (p)=><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
@@ -301,7 +316,7 @@
             X: (p)=><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         };
 
-        // 5. MobileNav Component
+        // 4. MobileNav Component
         const MobileNav = ({ activeTab, setActiveTab }) => (
             <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 flex justify-around py-3 pb-safe shadow-lg z-50 md:hidden no-print">
                 <button onClick={() => setActiveTab('employees')} className={`flex flex-col items-center ${activeTab === 'employees' ? 'text-blue-600' : 'text-gray-400'}`}>
@@ -509,8 +524,6 @@
 
             const handleSaveEmployee = async (e) => { e.preventDefault(); const fd = new FormData(e.target); const newEmp = { id: editingEmp?editingEmp.id:Date.now(), name: fd.get('name'), empId: fd.get('empId'), title: fd.get('title'), department: fd.get('department'), baseSalary: Number(fd.get('baseSalary')), laborFee: Number(fd.get('laborFee')), healthFee: Number(fd.get('healthFee')), lastRaiseDate: fd.get('lastRaiseDate') || new Date().toISOString().split('T')[0] }; await saveEmp(newEmp); setIsEmpModalOpen(false); };
             const deleteEmployee = (id) => { if(confirm('刪除?')) delEmp(id); };
-            
-            // V33: Batch update using checkboxes
             const handleBulkSubmit = async (e) => { 
                 e.preventDefault(); 
                 const target = Number(bulkTargetSalary); 
@@ -547,7 +560,7 @@
                 <div className="min-h-screen pb-24 md:pb-10 bg-gray-50">
                     <nav className="bg-slate-800 text-white shadow-lg print-hidden sticky top-0 z-40 hidden md:block">
                         <div className="max-w-7xl mx-auto px-4 flex justify-between h-16 items-center">
-                            <div className="flex items-center space-x-2"><Icons.Calculator className="w-6 h-6 text-yellow-400"/><span className="font-bold text-xl">薪資管理系統 V33.0</span></div>
+                            <div className="flex items-center space-x-2"><Icons.Calculator className="w-6 h-6 text-yellow-400"/><span className="font-bold text-xl">薪資管理系統 V34.1</span></div>
                             <div className="flex space-x-2">
                                 {user && <span className="flex items-center text-xs text-green-400 mr-4"><Icons.Cloud className="w-3 h-3 mr-1"/> 雲端同步</span>}
                                 <button onClick={()=>setActiveTab('employees')} className={`px-3 py-1 rounded ${activeTab==='employees'?'bg-yellow-500 text-black':'hover:bg-slate-700'}`}>員工設定</button>
@@ -562,7 +575,7 @@
                             <div className="space-y-4 animate-fade-in print-hidden">
                                 <div className="flex justify-between items-center"><h2 className="text-xl font-bold text-gray-800 hidden md:block">員工資料</h2><div className="flex space-x-2 w-full md:w-auto"><button onClick={()=>{setEditingEmp(null);setIsEmpModalOpen(true)}} className="flex-1 md:flex-none flex items-center justify-center bg-blue-600 text-white px-4 py-2 rounded shadow"><Icons.Plus className="w-4 h-4 mr-1"/> 新增</button><button onClick={()=>setIsBulkModalOpen(true)} className="flex-1 md:flex-none bg-orange-100 text-orange-700 px-4 py-2 rounded border border-orange-200">調薪</button></div></div>
                                 
-                                {/* V33 Checkbox Logic */}
+                                {/* Checkbox Logic */}
                                 <div className="hidden md:block bg-white rounded-xl shadow overflow-hidden">
                                     <table className="min-w-full text-sm">
                                         <thead className="bg-slate-50 text-left">
@@ -625,47 +638,50 @@
                                         <div key={item.id} className="payroll-slip payroll-slip-style">
                                             <div className="slip-title print-title">{getTitle(currentPeriod)} 薪資單</div>
                                             <div className="print-emp-info">
-                                                <span className="print-emp-name">{item.name} <span className="print-emp-id">({item.empId})</span></span>
-                                                <span className="print-dept">{item.department}</span>
+                                                <span className="emp-name">{item.name} <span className="emp-id">({item.empId})</span></span>
+                                                <span className="emp-dept">{item.department}</span>
                                             </div>
-                                            <div className="print-body">
+                                            <div className="body-grid">
                                                 <div>
-                                                    <div className="print-section-title">應發項目 (+)</div>
-                                                    <div className="print-row"><span className="print-label">底薪</span><span className="print-value">${formatNumber(item.baseSalary)}</span></div>
-                                                    {item.payWt034 > 0 && <div className="print-row"><span className="print-label">平日(0.34)</span><span className="print-value">${formatNumber(item.payWt034)}</span></div>}
-                                                    {item.payWt067 > 0 && <div className="print-row"><span className="print-label">平日(0.67)</span><span className="print-value">${formatNumber(item.payWt067)}</span></div>}
-                                                    {item.payHd134 > 0 && <div className="print-row"><span className="print-label">例假(1.34)</span><span className="print-value">${formatNumber(item.payHd134)}</span></div>}
-                                                    {item.payHd167 > 0 && <div className="print-row"><span className="print-label">例假(1.67)</span><span className="print-value">${formatNumber(item.payHd167)}</span></div>}
-                                                    {item.payEarly > 0 && <div className="print-row"><span className="print-label">提早上班</span><span className="print-value">${formatNumber(item.payEarly)}</span></div>}
-                                                    {item.payNoLunch > 0 && <div className="print-row"><span className="print-label">中午未休</span><span className="print-value">${formatNumber(item.payNoLunch)}</span></div>}
-                                                    {item.payHolidayOT > 0 && <div className="print-row"><span className="print-label">休假加班</span><span className="print-value">${formatNumber(item.payHolidayOT)}</span></div>}
-                                                    {item.lunchAllowance > 0 && <div className="print-row"><span className="print-label">午餐津貼</span><span className="print-value">${formatNumber(item.lunchAllowance)}</span></div>}
-                                                    {item.businessBonus > 0 && <div className="print-row"><span className="print-label">業務加給</span><span className="print-value">${formatNumber(item.businessBonus)}</span></div>}
-                                                    {item.otherBonus > 0 && <div className="print-row"><span className="print-label">其它加項</span><span className="print-value">${formatNumber(item.otherBonus)}</span></div>}
-                                                    <div className="print-subtotal"><span>應發合計</span><span>${formatNumber(item.grossPay)}</span></div>
+                                                    <div className="section-title">應發項目 (+)</div>
+                                                    <div className="item-row"><span className="item-label">底薪</span><span className="item-value">${formatNumber(item.baseSalary)}</span></div>
+                                                    {item.payWt034 > 0 && <div className="item-row"><span className="item-label">平日加班(0.34)</span><span className="item-value">${formatNumber(item.payWt034)}</span></div>}
+                                                    {item.payWt067 > 0 && <div className="item-row"><span className="item-label">平日加班(0.67)</span><span className="item-value">${formatNumber(item.payWt067)}</span></div>}
+                                                    {item.payHd134 > 0 && <div className="item-row"><span className="item-label">例假加班(1.34)</span><span className="item-value">${formatNumber(item.payHd134)}</span></div>}
+                                                    {item.payHd167 > 0 && <div className="item-row"><span className="item-label">例假加班(1.67)</span><span className="item-value">${formatNumber(item.payHd167)}</span></div>}
+                                                    {item.payEarly > 0 && <div className="item-row"><span className="item-label">提早上班</span><span className="item-value">${formatNumber(item.payEarly)}</span></div>}
+                                                    {item.payNoLunch > 0 && <div className="item-row"><span className="item-label">中午未休</span><span className="item-value">${formatNumber(item.payNoLunch)}</span></div>}
+                                                    {item.payHolidayOT > 0 && <div className="item-row"><span className="item-label">休假加班</span><span className="item-value">${formatNumber(item.payHolidayOT)}</span></div>}
+                                                    {item.lunchAllowance > 0 && <div className="item-row"><span className="item-label">午餐津貼</span><span className="item-value">${formatNumber(item.lunchAllowance)}</span></div>}
+                                                    {item.businessBonus > 0 && <div className="item-row"><span className="item-label">業務加給</span><span className="item-value">${formatNumber(item.businessBonus)}</span></div>}
+                                                    {item.otherBonus > 0 && <div className="item-row"><span className="item-label">其它加項</span><span className="item-value">${formatNumber(item.otherBonus)}</span></div>}
+                                                    <div className="subtotal-row"><span>應發合計</span><span>${formatNumber(item.grossPay)}</span></div>
                                                 </div>
-                                                <div className="print-divider"></div>
+                                                <div className="body-divider"></div>
                                                 <div>
-                                                    <div className="print-section-title">應扣項目 (-)</div>
-                                                    <div className="print-row"><span className="print-label">勞健保費</span><span className="print-value text-red-700">${formatNumber(item.insuranceFee)}</span></div>
-                                                    {item.dedAbsence > 0 && <div className="print-row"><span className="print-label">缺勤扣款</span><span className="print-value text-red-700">${formatNumber(item.dedAbsence)}</span></div>}
-                                                    {item.dedSick > 0 && <div className="print-row"><span className="print-label">病假扣款</span><span className="print-value text-red-700">${formatNumber(item.dedSick)}</span></div>}
-                                                    {item.dedPersonal > 0 && <div className="print-row"><span className="print-label">事假扣款</span><span className="print-value text-red-700">${formatNumber(item.dedPersonal)}</span></div>}
-                                                    <div className="print-subtotal" style={{color:'#dc2626'}}><span>應扣合計</span><span>${formatNumber(item.finalDeduction)}</span></div>
+                                                    <div className="section-title">應扣項目 (-)</div>
+                                                    <div className="item-row"><span className="item-label">勞健保費</span><span className="item-value text-red-700">${formatNumber(item.insuranceFee)}</span></div>
+                                                    {item.dedAbsence > 0 && <div className="item-row"><span className="item-label">缺勤扣款</span><span className="item-value text-red-700">${formatNumber(item.dedAbsence)}</span></div>}
+                                                    {item.dedSick > 0 && <div className="item-row"><span className="item-label">病假扣款</span><span className="item-value text-red-700">${formatNumber(item.dedSick)}</span></div>}
+                                                    {item.dedPersonal > 0 && <div className="item-row"><span className="item-label">事假扣款</span><span className="item-value text-red-700">${formatNumber(item.dedPersonal)}</span></div>}
+                                                    <div className="subtotal-row" style={{color:'#dc2626'}}><span>應扣合計</span><span>${formatNumber(item.finalDeduction)}</span></div>
                                                 </div>
                                             </div>
-                                            <div className="slip-footer">
-                                                <div className="footer-row">
-                                                    <div className="footer-info print-footer-text">
-                                                        <p className="font-bold mb-1">感謝您本月的辛勞！</p>
-                                                        工時:{item.actualWorkHours} / 應勤:{item.expectedHours}H<br/>
-                                                        {(timeStrToHours(item.annualLeave) > 0) && <span>特休:{item.annualLeave} | </span>}
-                                                        {(timeStrToHours(item.bereavementLeave) > 0) && <span>喪假:{item.bereavementLeave} | </span>}
-                                                        {(timeStrToHours(item.sickLeave) > 0) && <span>病假:{item.sickLeave} | </span>}
-                                                        {(timeStrToHours(item.personalLeave) > 0) && <span>事假:{item.personalLeave}</span>}
-                                                        {item.note && <div style={{marginTop:'2px', fontSize:'11px'}}>備註:{item.note}</div>}
+                                            <div className="footer">
+                                                <div className="footer-left">
+                                                    <p style={{fontWeight:'bold', marginBottom:'4px'}}>感謝您本月的辛勞！</p>
+                                                    工時:{item.actualWorkHours} / 應勤:{item.expectedHours}H
+                                                    <div style={{marginTop:'2px'}}>
+                                                        {(timeStrToHours(item.annualLeave) > 0) && <span style={{marginRight:'8px'}}>特休:{item.annualLeave} | </span>}
+                                                        {(timeStrToHours(item.bereavementLeave) > 0) && <span style={{marginRight:'8px'}}>喪假:{item.bereavementLeave} | </span>}
+                                                        {(timeStrToHours(item.sickLeave) > 0) && <span style={{marginRight:'8px'}}>病假:{item.sickLeave} | </span>}
+                                                        {(timeStrToHours(item.personalLeave) > 0) && <span style={{marginRight:'8px'}}>事假:{item.personalLeave}</span>}
                                                     </div>
-                                                    <div style={{textAlign:'right'}}><span className="print-net-pay-label">實發</span><span className="print-net-pay">${formatNumber(item.netPay)}</span></div>
+                                                    {item.note && <div style={{marginTop:'2px', fontSize:'11px'}}>備註:{item.note}</div>}
+                                                </div>
+                                                <div className="footer-right">
+                                                    <span className="net-pay-label">實發</span>
+                                                    <span className="net-pay-value">${formatNumber(item.netPay)}</span>
                                                 </div>
                                             </div>
                                         </div>
