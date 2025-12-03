@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>薪資管理系統 (V30.1 - 最終完美版)</title>
+    <title>薪資管理系統 (V30 - 專業旗艦版)</title>
     
     <!-- 1. 引入樣式與核心庫 -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -41,19 +41,19 @@
         input, select, button { touch-action: manipulation; }
         .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
 
-        /* --- 螢幕預覽樣式 (電腦版改為 2 欄) --- */
+        /* --- 螢幕預覽樣式 (Screen Preview) --- */
         @media (min-width: 1024px) {
             .print-container {
                 display: grid !important;
-                grid-template-columns: repeat(2, 1fr) !important; 
+                grid-template-columns: repeat(2, 1fr) !important; /* 電腦版預覽改為 2 欄 */
                 gap: 25px;
             }
             .payroll-slip {
                 background: white;
                 border: 2px solid #334155;
-                padding: 25px;
+                padding: 25px; /* 加大內距 */
                 box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-                min-height: 420px;
+                min-height: 420px; /* 預覽時拉高高度 */
                 display: flex;
                 flex-direction: column;
                 justify-content: space-between;
@@ -80,7 +80,7 @@
         @media print {
             @page { 
                 size: A4; 
-                margin: 4mm; /* 極窄邊距以容納滿版 */
+                margin: 5mm; /* 窄邊距 */
             }
             body * { visibility: hidden; }
             #print-container, #print-container * { visibility: visible; }
@@ -91,8 +91,8 @@
                 display: grid !important;
                 grid-template-columns: 1fr 1fr !important; 
                 grid-template-rows: 1fr 1fr !important;
-                gap: 6mm 6mm !important; /* 適當間距 */
-                align-content: center; 
+                gap: 6mm 6mm !important; /* 調整間距以適應滿版 */
+                align-content: center; /* 垂直置中 */
             }
             
             .payroll-slip {
@@ -102,7 +102,7 @@
                 display: flex; 
                 flex-direction: column;
                 justify-content: flex-start; 
-                height: 143mm !important; /* 精確計算填滿 A4 */
+                height: 142mm !important; /* 增加高度以填滿 A4 (297mm/2 - margin) */
                 break-inside: avoid; 
                 page-break-inside: avoid; 
                 background: white !important;
@@ -110,22 +110,20 @@
                 border-radius: 0 !important;
             }
 
-            /* 字體放大優化 (主從關係) */
+            /* 字體放大優化 (針對年長者) */
             .print-title { 
-                font-size: 24px !important; 
+                font-size: 26px !important; /* 標題加大 */
                 font-weight: 900 !important; 
                 text-align: center; 
                 border-bottom: 3px solid #000; 
-                margin-bottom: 8px; 
-                padding-bottom: 4px; 
+                margin-bottom: 10px; 
+                padding-bottom: 5px; 
                 letter-spacing: 2px; 
             }
             
-            .print-emp-info { 
-                display: flex; justify-content: space-between; align-items: baseline; 
-                margin-bottom: 8px; font-weight: 700; font-size: 18px !important; 
-                border-bottom: 1px dashed #666; padding-bottom: 5px; 
-            }
+            .print-emp-name { font-size: 22px !important; font-weight: 800 !important; }
+            .print-emp-id { font-size: 14px !important; font-weight: 500; }
+            .print-dept { font-size: 16px !important; font-weight: 700; }
 
             .print-label { font-size: 14px !important; color: #000 !important; font-weight: 700; }
             .print-value { font-size: 16px !important; font-weight: 800 !important; font-family: Consolas, monospace; text-align: right; }
@@ -138,10 +136,9 @@
                 color: #000; 
             }
             
-            /* 實發金額特大 */
             .print-net-pay-label { font-size: 20px !important; font-weight: 800; margin-right: 10px; }
             .print-net-pay { 
-                font-size: 32px !important; 
+                font-size: 36px !important; /* 實發金額超大 */
                 font-weight: 900; 
                 font-family: Consolas, monospace; 
                 border-bottom: 5px double #000; 
@@ -162,7 +159,7 @@
                 font-weight: 800; 
                 display: flex; 
                 justify-content: space-between; 
-                font-size: 14px !important; 
+                font-size: 15px !important; 
             }
 
             nav, .mobile-nav, button, .no-print, #loading-screen, #error-display { display: none !important; }
@@ -498,25 +495,7 @@
                                 <div className="hidden md:flex justify-between mb-4"><div className="flex items-center space-x-4"><input type="month" value={currentPeriod} onChange={e=>setCurrentPeriod(e.target.value)} className="border rounded px-2 py-1"/>{isLocked && <span className="text-red-600 font-bold bg-red-50 px-2 py-1 rounded">已結案</span>}<button onClick={toggleLock} className="text-sm underline text-gray-500">{isLocked ? '解鎖' : '鎖定'}</button></div><button onClick={()=>setIsImportModalOpen(true)} className={`px-4 py-2 bg-emerald-600 text-white rounded ${isLocked?'opacity-50':''}`} disabled={isLocked}>匯入 Excel</button></div>
                                 <div className="md:hidden flex justify-between items-center mb-2"><span className="text-gray-500 text-sm">{isLocked ? '🔒 本月已結案' : '🟢 編輯中'}</span><button onClick={toggleLock} className="text-xs bg-gray-200 px-2 py-1 rounded">{isLocked ? '解鎖' : '結案'}</button></div>
                                 {!isLocked && (<button onClick={()=>setIsImportModalOpen(true)} className="md:hidden w-full py-3 bg-emerald-100 text-emerald-700 font-bold rounded-lg border border-emerald-200 mb-4 flex items-center justify-center"><Icons.FileSpreadsheet className="w-5 h-5 mr-2"/> 匯入 Excel</button>)}
-                                
-                                {/* 修正手機版列表 JSX 結構錯誤 (移除多餘的 div 閉合) */}
-                                <div className="grid grid-cols-1 gap-3 md:hidden">
-                                    {fullPayrollList.map(item => (
-                                        <div key={item.id} className="bg-white p-4 rounded-lg shadow active:bg-blue-50 transition border border-gray-100" onClick={() => !isLocked && setMobileEditItem(item)}>
-                                            <div className="flex justify-between items-center">
-                                                <div><div className="font-bold text-lg">{item.name}</div><div className="text-xs text-gray-500">實發薪資</div></div>
-                                                <div className="text-2xl font-bold text-blue-600">${formatNumber(item.netPay)}</div>
-                                            </div>
-                                            <div className="mt-3 pt-3 border-t flex justify-between text-xs text-gray-500">
-                                                <span>加項: ${formatNumber(item.totalAdditions)}</span>
-                                                <span>扣項: ${formatNumber(item.finalDeduction)}</span>
-                                                <span>工時: {item.actualWorkHours}</span>
-                                            </div>
-                                            {!isLocked && <div className="text-center text-xs text-blue-400 mt-2">點擊編輯明細</div>}
-                                        </div>
-                                    ))}
-                                </div>
-
+                                <div className="grid grid-cols-1 gap-3 md:hidden">{fullPayrollList.map(item => (<div key={item.id} onClick={() => !isLocked && setMobileEditItem(item)} className="bg-white p-4 rounded-lg shadow active:bg-blue-50 transition border border-gray-100"><div><div className="font-bold text-lg">{item.name}</div><div className="text-xs text-gray-500">實發薪資</div></div><div className="text-2xl font-bold text-blue-600">${formatNumber(item.netPay)}</div><div className="mt-3 pt-3 border-t flex justify-between text-xs text-gray-500"><span>加項: ${formatNumber(item.totalAdditions)}</span><span>扣項: ${formatNumber(item.finalDeduction)}</span><span>工時: {item.actualWorkHours}</span></div>{!isLocked && <div className="text-center text-xs text-blue-400 mt-2">點擊編輯明細</div>}</div>))}</div>
                                 <div className="hidden md:block bg-white rounded-xl shadow overflow-x-auto"><table className="min-w-full text-xs whitespace-nowrap"><thead className="bg-slate-100"><tr><th className="p-2 sticky left-0 bg-slate-100 z-10">員工</th><th className="p-2">實工</th><th className="p-2 bg-blue-50">平(0.34)</th><th className="p-2 bg-blue-50">平(0.67)</th><th className="p-2 bg-purple-50">例(1.34)</th><th className="p-2 bg-purple-50">例(1.67)</th><th className="p-2">提早</th><th className="p-2">未休</th><th className="p-2">休加</th><th className="p-2 text-green-700">午餐</th><th className="p-2 text-green-700">業務</th><th className="p-2 text-green-700">其它</th><th className="p-2 text-red-700">病0.5</th><th className="p-2 text-red-800">事1.0</th><th className="p-2 text-orange-700">勞健</th><th className="p-2 sticky right-0 bg-slate-100 z-10">實發</th></tr></thead><tbody>{fullPayrollList.map(item => (<tr key={item.id} className="border-b hover:bg-gray-50"><td className="p-2 sticky left-0 bg-white font-bold z-10">{item.name}</td><td className="p-1"><input disabled={isLocked} className="w-14 border" value={item.actualWorkHours} onChange={e=>updateVal(item.empId,'actualWorkHours',e.target.value)} onBlur={e=>handleTimeBlur(item.empId,'actualWorkHours',e.target.value)}/></td><td className="p-1 bg-blue-50"><input disabled={isLocked} className="w-12 border" value={item.wt034} onChange={e=>updateVal(item.empId,'wt034',e.target.value)} onBlur={e=>handleTimeBlur(item.empId,'wt034',e.target.value)}/></td><td className="p-1 bg-blue-50"><input disabled={isLocked} className="w-12 border" value={item.wt067} onChange={e=>updateVal(item.empId,'wt067',e.target.value)} onBlur={e=>handleTimeBlur(item.empId,'wt067',e.target.value)}/></td><td className="p-1 bg-purple-50"><input disabled={isLocked} className="w-12 border" value={item.hd134} onChange={e=>updateVal(item.empId,'hd134',e.target.value)} onBlur={e=>handleTimeBlur(item.empId,'hd134',e.target.value)}/></td><td className="p-1 bg-purple-50"><input disabled={isLocked} className="w-12 border" value={item.hd167} onChange={e=>updateVal(item.empId,'hd167',e.target.value)} onBlur={e=>handleTimeBlur(item.empId,'hd167',e.target.value)}/></td><td className="p-1"><input disabled={isLocked} className="w-12 border" value={item.earlyShift} onChange={e=>updateVal(item.empId,'earlyShift',e.target.value)} onBlur={e=>handleTimeBlur(item.empId,'earlyShift',e.target.value)}/></td><td className="p-1"><input disabled={isLocked} className="w-12 border" value={item.noLunch} onChange={e=>updateVal(item.empId,'noLunch',e.target.value)} onBlur={e=>handleTimeBlur(item.empId,'noLunch',e.target.value)}/></td><td className="p-1"><input disabled={isLocked} className="w-12 border" value={item.holidayOT} onChange={e=>updateVal(item.empId,'holidayOT',e.target.value)} onBlur={e=>handleTimeBlur(item.empId,'holidayOT',e.target.value)}/></td><td className="p-1"><input type="number" disabled={isLocked} className="w-14 border" value={item.lunchAllowance} onChange={e=>updateVal(item.empId,'lunchAllowance',e.target.value)}/></td><td className="p-1 bg-green-50"><input type="number" disabled={isLocked} className="w-14 border font-bold text-green-700" value={item.businessBonus} onChange={e=>updateVal(item.empId,'businessBonus',e.target.value)}/></td><td className="p-1 bg-green-50"><input type="number" disabled={isLocked} className="w-14 border font-bold text-green-700" value={item.otherBonus} onChange={e=>updateVal(item.empId,'otherBonus',e.target.value)}/></td><td className="p-1"><input disabled={isLocked} className="w-12 border" value={item.sickLeave} onChange={e=>updateVal(item.empId,'sickLeave',e.target.value)} onBlur={e=>handleTimeBlur(item.empId,'sickLeave',e.target.value)}/></td><td className="p-1"><input disabled={isLocked} className="w-12 border" value={item.personalLeave} onChange={e=>updateVal(item.empId,'personalLeave',e.target.value)} onBlur={e=>handleTimeBlur(item.empId,'personalLeave',e.target.value)}/></td><td className="p-1"><input type="number" disabled={isLocked} className="w-14 border" value={item.deduction} onChange={e=>updateVal(item.empId,'deduction',e.target.value)}/></td><td className="p-2 sticky right-0 bg-white font-bold text-blue-700 z-10">${formatNumber(item.netPay)}</td></tr>))}</tbody></table></div>
                             </div>
                         )}
