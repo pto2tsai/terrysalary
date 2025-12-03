@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>薪資管理系統 (V28.2 - 雲端同步修正版)</title>
+    <title>薪資管理系統 (V28.2 - 雲端完整版)</title>
     
     <!-- 1. 引入樣式與核心庫 -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -12,14 +12,25 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
     
-    <!-- 引入 Firebase SDK (模組化版本) -->
+    <!-- 2. 引入 Firebase SDK -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // 暴露 Firebase 功能給全域使用
-        window.firebaseModules = { initializeApp, getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken, getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, query, orderBy };
+        // 將 Firebase 功能掛載到 window 物件，供 React 使用
+        window.firebaseModules = { 
+            initializeApp, 
+            getAuth, 
+            signInAnonymously, 
+            onAuthStateChanged, 
+            getFirestore, 
+            collection, 
+            doc, 
+            setDoc, 
+            deleteDoc, 
+            onSnapshot 
+        };
     </script>
 
     <style>
@@ -28,33 +39,33 @@
         input, select, button { touch-action: manipulation; }
         .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
 
-        /* --- 螢幕預覽樣式 (Screen Preview) --- */
-        /* 電腦版：報表預覽頁面顯示為 4 欄卡片 */
+        /* --- 螢幕預覽樣式 --- */
         @media (min-width: 1024px) {
-            .screen-preview-container #print-container {
-                display: grid;
-                grid-template-columns: repeat(4, 1fr);
+            .print-container {
+                display: grid !important;
+                grid-template-columns: repeat(4, 1fr) !important;
                 gap: 15px;
             }
-            .screen-preview-container .payroll-slip {
+            .payroll-slip {
                 background: white;
                 border: 1px solid #cbd5e1;
                 padding: 15px;
                 box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
                 border-radius: 8px;
-                height: auto; 
                 min-height: 380px;
+                display: flex;
+                flex-direction: column;
+                justify-content: space-between;
             }
         }
         
-        /* 手機版：維持單欄 */
         @media (max-width: 1023px) {
-            .screen-preview-container #print-container {
-                display: grid;
-                grid-template-columns: 1fr;
+            .print-container {
+                display: grid !important;
+                grid-template-columns: 1fr !important;
                 gap: 15px;
             }
-            .screen-preview-container .payroll-slip {
+            .payroll-slip {
                 background: white;
                 border: 1px solid #cbd5e1;
                 padding: 15px;
@@ -63,7 +74,7 @@
             }
         }
 
-        /* --- 列印核心樣式 (Print Core) - A4 4張 --- */
+        /* --- 列印樣式 (A4 4張) --- */
         @media print {
             @page { size: A4; margin: 5mm; }
             body * { visibility: hidden; }
@@ -80,38 +91,30 @@
             }
             
             .payroll-slip {
-                border: 2px solid #000 !important; padding: 10px !important;
-                box-sizing: border-box; display: flex; flex-direction: column;
+                border: 3px double #000 !important; 
+                padding: 10px !important;
+                box-sizing: border-box; 
+                display: flex; 
+                flex-direction: column;
                 justify-content: space-between; 
                 height: 135mm !important; 
-                break-inside: avoid; page-break-inside: avoid; position: relative;
+                break-inside: avoid; 
+                page-break-inside: avoid; 
                 background: white !important;
-                border-radius: 0 !important;
                 box-shadow: none !important;
+                border-radius: 0 !important;
             }
-            .slip-header { border-bottom: 3px double #000; margin-bottom: 5px; padding-bottom: 3px; text-align: center; }
-            .slip-title { font-size: 20px !important; font-weight: 900 !important; letter-spacing: 1px; }
-            .slip-subtitle { font-size: 12px !important; margin-top: 2px; }
-            .emp-info { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 5px; font-weight: 700; font-size: 16px; border-bottom: 1px solid #ccc; padding-bottom: 3px; }
-            .slip-body { display: grid; grid-template-columns: 1fr 1px 1fr; gap: 8px; flex-grow: 1; }
-            .divider { background-color: #ccc; height: 100%; }
-            .item-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px; line-height: 1.3; }
-            .item-label { font-size: 11px !important; color: #000 !important; font-weight: 600; }
-            .item-value { font-size: 12px !important; font-weight: 800 !important; font-family: Consolas, monospace; text-align: right; }
-            .section-title { font-size: 12px; font-weight: 900; text-decoration: underline; margin-bottom: 3px; color: #000; }
-            .slip-footer { margin-top: auto; border-top: 2px solid #000; padding-top: 5px; }
-            .footer-row { display: flex; justify-content: space-between; align-items: flex-end; }
-            .footer-info { font-size: 9px !important; color: #000; line-height: 1.2; width: 60%; }
-            .net-pay-label { font-size: 14px; font-weight: 800; margin-right: 5px; }
-            .net-pay-value { font-size: 24px; font-weight: 900; font-family: Consolas, monospace; border-bottom: 3px double #000; }
-            
-            /* 隱藏所有操作介面 */
-            nav, .mobile-nav, button, .no-print, #loading-screen { display: none !important; }
-        }
 
-        .animate-fade-in { animation: fadeIn 0.3s ease-in-out; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
-        .dashed-border { background-image: url("data:image/svg+xml,%3csvg width='100%25' height='100%25' xmlns='http://www.w3.org/2000/svg'%3e%3crect width='100%25' height='100%25' fill='none' rx='16' ry='16' stroke='%233B82F6FF' stroke-width='4' stroke-dasharray='12%2c 12' stroke-dashoffset='0' stroke-linecap='square'/%3e%3c/svg%3e"); }
+            /* 列印字體設定 */
+            .print-title { font-size: 20px !important; font-weight: 900 !important; text-align: center; border-bottom: 2px solid #000; margin-bottom: 5px; }
+            .print-label { font-size: 11px !important; color: #000 !important; font-weight: 600; }
+            .print-value { font-size: 12px !important; font-weight: 800 !important; font-family: Consolas, monospace; text-align: right; }
+            .print-section-title { font-size: 12px !important; font-weight: 900; text-decoration: underline; margin-bottom: 3px; color: #000; }
+            .print-net-pay { font-size: 24px !important; font-weight: 900; font-family: Consolas, monospace; border-bottom: 3px double #000; }
+            
+            nav, .mobile-nav, button, .no-print, #loading-screen, #error-display { display: none !important; }
+        }
+        
         .input-locked { background-color: #f3f4f6; color: #6b7280; cursor: not-allowed; border-color: #e5e7eb; }
     </style>
 </head>
@@ -119,7 +122,7 @@
 
     <div id="loading-screen" class="fixed inset-0 flex flex-col items-center justify-center bg-white z-50">
         <div class="w-10 h-10 border-4 border-gray-200 border-t-blue-500 rounded-full animate-spin"></div>
-        <p class="mt-4 text-gray-500">正在連線至雲端資料庫...</p>
+        <p class="mt-4 text-gray-500">系統啟動中...</p>
     </div>
 
     <div id="root"></div>
@@ -127,7 +130,7 @@
     <script type="text/babel">
         const { useState, useMemo, useEffect, useRef } = React;
 
-        // --- 1. Firebase Config ---
+        // 1. 您的 Firebase 設定
         const USER_FIREBASE_CONFIG = {
           apiKey: "AIzaSyDvu-VONOJoj251pMPMXRfT_L4uVDJS4Q8",
           authDomain: "terrysalary.firebaseapp.com",
@@ -137,8 +140,9 @@
           appId: "1:556461050986:web:7a8f13d3d9adb5f77d0e13"
         };
 
-        // --- 2. Helper Functions (Fixes ReferenceError) ---
+        // 2. 全域輔助函式 (避免 ReferenceError)
         const formatNumber = (num) => {
+            if (num === undefined || num === null || num === '') return '0';
             const n = Number(num);
             return isNaN(n) ? "0" : n.toLocaleString();
         };
@@ -150,7 +154,7 @@
             return `${parts[0]}年${parts[1]}月`;
         };
 
-        // --- 3. Icons ---
+        // 3. 圖示組件
         const Icon = ({ path, className }) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{path}</svg>;
         const Icons = {
             Calculator: (p)=><Icon {...p} path={<><rect width="16" height="20" x="4" y="2" rx="2"/><line x1="8" x2="16" y1="6" y2="6"/><line x1="16" x2="16" y1="14" y2="18"/><path d="M16 10h.01"/><path d="M12 10h.01"/><path d="M8 10h.01"/><path d="M12 14h.01"/><path d="M8 14h.01"/><path d="M12 18h.01"/><path d="M8 18h.01"/></>}/>,
@@ -170,7 +174,7 @@
             Cloud: (p)=><Icon {...p} path={<><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></>}/>
         };
 
-        // --- 4. MobileNav Component (Defined before use) ---
+        // 4. 手機導覽列 (需定義在 PayrollApp 之前)
         const MobileNav = ({ activeTab, setActiveTab }) => (
             <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 flex justify-around py-3 pb-safe shadow-lg z-50 md:hidden no-print">
                 <button onClick={() => setActiveTab('employees')} className={`flex flex-col items-center ${activeTab === 'employees' ? 'text-blue-600' : 'text-gray-400'}`}>
@@ -188,146 +192,107 @@
             </div>
         );
 
-        // --- Firebase Hook ---
-        const useFirebase = () => {
+        const INITIAL_EMPLOYEES = [{ id: 1, name: '範例-張耀升', empId: 'W0001', baseSalary: 28590, laborFee: 1100, healthFee: 750, title: '作業員', department: '生產部', lastRaiseDate: '2024-01-01' }];
+        const INITIAL_PAYROLL_DATA = [{ empId: 1, period: '2025-11', wt034:"00:00", wt067:"00:00", hd134:"00:00", hd167:"00:00", earlyShift:"00:00", noLunch:"00:00", holidayOT:"00:00", sickLeave:"00:00", personalLeave:"00:00", annualLeave:"00:00", bereavementLeave:"00:00", lunchAllowance:0, businessBonus:0, otherBonus:0, deduction:0, expectedWorkDays:20, actualWorkHours:"160:00", note:'' }];
+
+        const PayrollApp = () => {
             const [db, setDb] = useState(null);
             const [user, setUser] = useState(null);
             const [appId, setAppId] = useState(null);
+            const [isCloudReady, setIsCloudReady] = useState(false);
 
+            // 初始化 Firebase
             useEffect(() => {
                 const init = async () => {
                     while (!window.firebaseModules) { await new Promise(resolve => setTimeout(resolve, 100)); }
                     const { initializeApp, getAuth, signInAnonymously, onAuthStateChanged, getFirestore } = window.firebaseModules;
-                    try {
-                        let config = USER_FIREBASE_CONFIG;
-                        // 備用: 如果沒有 config，嘗試從環境變數讀取 (WebContainer 環境)
-                        if (!config && typeof __firebase_config !== 'undefined') {
-                            try { config = JSON.parse(__firebase_config); } catch(e) {}
-                        }
-                        
-                        if (!config) {
-                            console.warn("未設定 Firebase Config，將使用本地模式");
-                            document.getElementById('loading-screen').style.display = 'none';
-                            return; 
-                        }
 
-                        const app = initializeApp(config);
+                    try {
+                        const app = initializeApp(USER_FIREBASE_CONFIG);
                         const auth = getAuth(app);
                         const firestore = getFirestore(app);
-                        const currentAppId = typeof __app_id !== 'undefined' ? __app_id : 'default-app';
                         
-                        setAppId(currentAppId);
+                        setAppId("default-app"); // 固定 App ID
                         setDb(firestore);
 
                         await signInAnonymously(auth);
                         onAuthStateChanged(auth, (u) => {
                             setUser(u);
+                            setIsCloudReady(true);
                             document.getElementById('loading-screen').style.display = 'none';
                         });
                     } catch (error) {
-                        console.error("Firebase Init Failed", error);
-                        alert("雲端連線失敗，系統將切換為本地模式。");
+                        console.error("Firebase Error:", error);
+                        alert("雲端連線失敗，系統將使用本地模式。");
                         document.getElementById('loading-screen').style.display = 'none';
                     }
                 };
                 init();
             }, []);
-            return { db, user, appId };
-        };
 
-        const INITIAL_EMPLOYEES = [
-            { id: 1, name: '範例-張耀升', empId: 'W0001', baseSalary: 28590, laborFee: 1100, healthFee: 750, title: '作業員', department: '生產部', lastRaiseDate: '2024-01-01' },
-        ];
-        const INITIAL_PAYROLL_DATA = [{ empId: 1, period: '2025-11', wt034:"00:00", wt067:"00:00", hd134:"00:00", hd167:"00:00", earlyShift:"00:00", noLunch:"00:00", holidayOT:"00:00", sickLeave:"00:00", personalLeave:"00:00", annualLeave:"00:00", bereavementLeave:"00:00", lunchAllowance:0, businessBonus:0, otherBonus:0, deduction:0, expectedWorkDays:20, actualWorkHours:"160:00", note:'' }];
-
-        const PayrollApp = () => {
-            const { db, user, appId } = useFirebase();
+            const safeParse = (key, defaultVal) => { try { return JSON.parse(localStorage.getItem(key)) || defaultVal; } catch(e) { return defaultVal; } };
             const [activeTab, setActiveTab] = useState('input');
-            
-            // 混合資料源：雲端優先，本地為輔
-            const [employees, setEmployees] = useState(INITIAL_EMPLOYEES);
-            const [payrollData, setPayrollData] = useState(INITIAL_PAYROLL_DATA);
-            const [monthlyStatus, setMonthlyStatus] = useState({});
-            
+            const [employees, setEmployees] = useState(() => safeParse('payroll_employees', INITIAL_EMPLOYEES));
+            const [payrollData, setPayrollData] = useState(() => safeParse('payroll_data', INITIAL_PAYROLL_DATA));
+            const [monthlyStatus, setMonthlyStatus] = useState(() => safeParse('payroll_status', {}));
             const [currentPeriod, setCurrentPeriod] = useState(new Date().toISOString().slice(0, 7));
             
-            // Modals
             const [editingEmp, setEditingEmp] = useState(null);
             const [isEmpModalOpen, setIsEmpModalOpen] = useState(false);
             const [isImportModalOpen, setIsImportModalOpen] = useState(false);
             const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
             const [mobileEditItem, setMobileEditItem] = useState(null);
-
             const [bulkTargetSalary, setBulkTargetSalary] = useState(29500);
             const [bulkFilterType, setBulkFilterType] = useState('salary');
             const [bulkFilterValue, setBulkFilterValue] = useState(28590);
             const fileInputRef = useRef(null);
 
-            // Sync Logic
+            // 資料同步
             useEffect(() => {
-                if (db && user) {
+                if (isCloudReady && db && user) {
                     const { collection, onSnapshot } = window.firebaseModules;
-                    const empUnsub = onSnapshot(collection(db, 'artifacts', appId, 'users', user.uid, 'employees'), (snap) => {
+                    const empUnsub = onSnapshot(collection(db, 'payroll_system', user.uid, 'employees'), (snap) => {
                         const list = snap.docs.map(d => d.data());
                         if(list.length > 0) setEmployees(list);
                     });
-                    const payUnsub = onSnapshot(collection(db, 'artifacts', appId, 'users', user.uid, 'payroll'), (snap) => {
+                    const payUnsub = onSnapshot(collection(db, 'payroll_system', user.uid, 'payroll'), (snap) => {
                         const list = snap.docs.map(d => d.data());
                         if(list.length > 0) setPayrollData(list);
                     });
-                    const statUnsub = onSnapshot(collection(db, 'artifacts', appId, 'users', user.uid, 'status'), (snap) => {
+                    const statUnsub = onSnapshot(collection(db, 'payroll_system', user.uid, 'status'), (snap) => {
                         const obj = {}; snap.docs.forEach(d => obj[d.id] = d.data().status);
                         setMonthlyStatus(obj);
                     });
                     return () => { empUnsub(); payUnsub(); statUnsub(); };
                 } else {
-                    // Local Storage Read (Fallback)
-                    const localEmp = localStorage.getItem('payroll_employees');
-                    if(localEmp) setEmployees(JSON.parse(localEmp));
-                    
-                    const localPay = localStorage.getItem('payroll_data');
-                    if(localPay) setPayrollData(JSON.parse(localPay));
-                    
-                    const localStat = localStorage.getItem('payroll_status');
-                    if(localStat) setMonthlyStatus(JSON.parse(localStat));
+                    localStorage.setItem('payroll_employees', JSON.stringify(employees));
+                    localStorage.setItem('payroll_data', JSON.stringify(payrollData));
+                    localStorage.setItem('payroll_status', JSON.stringify(monthlyStatus));
                 }
-            }, [db, user, appId]);
+            }, [employees, payrollData, monthlyStatus, isCloudReady, db, user]);
 
-            // Save Logic
+            // 存檔函數
             const saveEmp = async (emp) => {
-                if (db && user) { const { doc, setDoc } = window.firebaseModules; await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'employees', String(emp.id)), emp); }
-                else { 
-                    const newEmps = employees.some(e=>e.id===emp.id) ? employees.map(e=>e.id===emp.id?emp:e) : [...employees, emp];
-                    setEmployees(newEmps); localStorage.setItem('payroll_employees', JSON.stringify(newEmps));
-                }
+                if (isCloudReady) { const { doc, setDoc } = window.firebaseModules; await setDoc(doc(db, 'payroll_system', user.uid, 'employees', String(emp.id)), emp); }
+                else { const newEmps = employees.some(e=>e.id===emp.id) ? employees.map(e=>e.id===emp.id?emp:e) : [...employees, emp]; setEmployees(newEmps); }
             };
             const delEmp = async (id) => {
-                if (db && user) { const { doc, deleteDoc } = window.firebaseModules; await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'employees', String(id))); }
-                else { 
-                    const newEmps = employees.filter(e=>e.id!==id);
-                    setEmployees(newEmps); localStorage.setItem('payroll_employees', JSON.stringify(newEmps));
-                }
+                if (isCloudReady) { const { doc, deleteDoc } = window.firebaseModules; await deleteDoc(doc(db, 'payroll_system', user.uid, 'employees', String(id))); }
+                else { setEmployees(prev => prev.filter(e=>e.id!==id)); }
             };
             const savePay = async (data) => {
-                if (db && user) { const { doc, setDoc } = window.firebaseModules; const key = `${data.empId}_${data.period}`; await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'payroll', key), data); }
-                else {
-                    const idx = payrollData.findIndex(p=>p.empId===data.empId && p.period===data.period);
-                    const newPay = [...payrollData];
-                    if(idx>=0) newPay[idx]=data; else newPay.push(data);
-                    setPayrollData(newPay); localStorage.setItem('payroll_data', JSON.stringify(newPay));
-                }
+                if (isCloudReady) { const { doc, setDoc } = window.firebaseModules; const key = `${data.empId}_${data.period}`; await setDoc(doc(db, 'payroll_system', user.uid, 'payroll', key), data); }
+                else { setPayrollData(prev => { const idx = prev.findIndex(p=>p.empId===data.empId && p.period===data.period); if(idx>=0) { const n=[...prev]; n[idx]=data; return n; } return [...prev, data]; }); }
             };
             const saveStat = async (period, status) => {
-                if (db && user) { const { doc, setDoc } = window.firebaseModules; await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'status', period), { status }); }
-                else {
-                    const newStat = {...monthlyStatus, [period]: status};
-                    setMonthlyStatus(newStat); localStorage.setItem('payroll_status', JSON.stringify(newStat));
-                }
+                if (isCloudReady) { const { doc, setDoc } = window.firebaseModules; await setDoc(doc(db, 'payroll_system', user.uid, 'status', period), { status }); }
+                else { setMonthlyStatus(prev => ({...prev, [period]: status})); }
             };
 
             const isLocked = monthlyStatus[currentPeriod] === 'locked';
             const toggleLock = () => { if(confirm(`確定要${isLocked?'解除結案':'結案'}?`)) saveStat(currentPeriod, isLocked?'active':'locked'); };
 
+            const safeNum = (val) => { const num = Number(val); return isNaN(num) ? 0 : num; };
             const timeStrToHours = (str) => { if (!str) return 0; const [h, m] = String(str).split(':').map(Number); return (safeNum(h)) + (safeNum(m))/60; };
             const hoursToTimeStr = (hours) => { if (!hours && hours !== 0) return "00:00"; const h = Math.floor(hours); const m = Math.round((hours - h) * 60); return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`; };
             const formatInputTime = (val) => {
@@ -338,7 +303,6 @@
             };
             const excelTimeToString = (val) => { if (typeof val === 'number') { const t = val * 24; const h = Math.floor(t); const m = Math.round((t - h) * 60); return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`; } return formatInputTime(val); };
 
-            // Logic
             const calculateSalary = (emp, data) => {
                 if (!emp) return null;
                 const d = data || {};
@@ -350,9 +314,8 @@
                 const payEarly = Math.round(timeStrToHours(d.earlyShift) * 0.34 * hourlyRate);
                 const payNoLunch = Math.round(timeStrToHours(d.noLunch) * 0.34 * hourlyRate);
                 const payHolidayOT = Math.round(timeStrToHours(d.holidayOT) * 1.34 * hourlyRate);
-                const payAnnual = 0; 
                 const allowances = safeNum(d.lunchAllowance) + safeNum(d.businessBonus) + safeNum(d.otherBonus);
-                const totalAdditions = payWt034 + payWt067 + payHd134 + payHd167 + payEarly + payNoLunch + payHolidayOT + payAnnual + allowances;
+                const totalAdditions = payWt034 + payWt067 + payHd134 + payHd167 + payEarly + payNoLunch + payHolidayOT + allowances;
                 const grossPay = safeNum(emp.baseSalary) + totalAdditions;
                 const dedSick = Math.round(timeStrToHours(d.sickLeave) * 0.5 * hourlyRate);
                 const dedPersonal = Math.round(timeStrToHours(d.personalLeave) * 1.0 * hourlyRate);
@@ -392,14 +355,19 @@
                 if (field === 'deduction') newData.hasImportedInsurance = false;
                 savePay(newData);
             };
-
             const handleTimeBlur = (empId, field, value) => updateVal(empId, field, formatInputTime(value));
-
-            // Excel Import
+            const parseLeave = (note) => {
+                let sick=0, personal=0, annual=0, bereavement=0;
+                if (!note) return { sick: "00:00", personal: "00:00", annual: "00:00", bereavement: "00:00" };
+                const str = note.toString();
+                const parseMatch = (regex) => { const match = str.match(regex); if(match) { const h=parseInt(match[2])||0; const m=parseInt(match[4])||0; return h+m/60; } return 0; };
+                sick = parseMatch(/(病假)\s*(\d+)([:\.](\d+))?/); personal = parseMatch(/(事假|曠職|扣薪|颱風)\s*(\d+)([:\.](\d+))?/);
+                annual = parseMatch(/(特休|年假)\s*(\d+)([:\.](\d+))?/); bereavement = parseMatch(/(喪假)\s*(\d+)([:\.](\d+))?/);
+                return { sick: hoursToTimeStr(sick), personal: hoursToTimeStr(personal), annual: hoursToTimeStr(annual), bereavement: hoursToTimeStr(bereavement) };
+            };
             const handleExcel = (e) => {
                 if (isLocked) { alert("本月已結案"); return; }
-                const file = e.target.files[0];
-                if (!file) return;
+                const file = e.target.files[0]; if (!file) return;
                 const reader = new FileReader();
                 reader.onload = (evt) => {
                     try {
@@ -422,18 +390,14 @@
                             if((t.includes("例假")||t.includes("假日"))&&(t.includes("1.34")||t.includes("1.33"))&&idx.hd134===-1) idx.hd134=i;
                             if((t.includes("例假")||t.includes("假日"))&&(t.includes("1.67")||t.includes("1.66"))&&idx.hd167===-1) idx.hd167=i;
                         });
-                        if(idx.note===-1) idx.note=headers.length-1;
-                        
                         let count = 0;
                         rows.forEach(async row => {
-                            const eid = String(row[idx.id]||"").trim();
-                            if(!eid) return;
+                            const eid = String(row[idx.id]||"").trim(); if(!eid) return;
                             let emp = employees.find(e => e.empId === eid);
                             if(!emp) { emp = { id: Date.now()+Math.random(), empId: eid, name: String(row[idx.name]||""), baseSalary: 28590, laborFee:0, healthFee:0, title:"員工", department: String(row[idx.dept]||""), lastRaiseDate: new Date().toISOString().split('T')[0] }; await saveEmp(emp); }
                             if(emp) {
                                 const noteText = String(row[idx.note]||"");
-                                const parseMatch = (reg) => { const m=noteText.match(reg); if(m) return (parseInt(m[2])||0) + (parseInt(m[4])||0)/60; return 0; };
-                                const leaves = { sick: hoursToTimeStr(parseMatch(/(病假)\s*(\d+)([:\.](\d+))?/)), personal: hoursToTimeStr(parseMatch(/(事假|曠職|扣薪|颱風)\s*(\d+)([:\.](\d+))?/)), annual: hoursToTimeStr(parseMatch(/(特休|年假)\s*(\d+)([:\.](\d+))?/)), bereavement: hoursToTimeStr(parseMatch(/(喪假)\s*(\d+)([:\.](\d+))?/)) };
+                                const leaves = parseLeave(noteText); // Use the note parsing if needed
                                 const entry = { empId: emp.empId, period: currentPeriod, wt034: idx.wt034!==-1?excelTimeToString(row[idx.wt034]):"00:00", wt067: idx.wt067!==-1?excelTimeToString(row[idx.wt067]):"00:00", hd134: idx.hd134!==-1?excelTimeToString(row[idx.hd134]):"00:00", hd167: idx.hd167!==-1?excelTimeToString(row[idx.hd167]):"00:00", earlyShift: excelTimeToString(row[idx.early]), noLunch: excelTimeToString(row[idx.noLunch]), holidayOT: excelTimeToString(row[idx.holidayOT]), lunchAllowance: parseInt(row[idx.lunch])||0, businessBonus: parseInt(row[idx.bonus])||0, deduction: parseInt(row[idx.ins])||0, hasImportedInsurance: !!(parseInt(row[idx.ins])), expectedWorkDays: parseInt(row[idx.expDays])||0, actualWorkHours: excelTimeToString(row[idx.actHours]), sickLeave: leaves.sick, personalLeave: leaves.personal, annualLeave: (idx.annual!==-1?excelTimeToString(row[idx.annual]):leaves.annual), bereavementLeave: leaves.bereavement, note: noteText };
                                 await savePay(entry); count++;
                             }
@@ -445,106 +409,40 @@
                 reader.readAsBinaryString(file);
             };
 
-            const handleSaveEmployee = async (e) => {
-                e.preventDefault(); const fd = new FormData(e.target);
-                const newEmp = { id: editingEmp?editingEmp.id:Date.now(), name: fd.get('name'), empId: fd.get('empId'), title: fd.get('title'), department: fd.get('department'), baseSalary: Number(fd.get('baseSalary')), laborFee: Number(fd.get('laborFee')), healthFee: Number(fd.get('healthFee')), lastRaiseDate: (editingEmp && editingEmp.baseSalary === Number(fd.get('baseSalary'))) ? (editingEmp.lastRaiseDate||'') : new Date().toISOString().split('T')[0] };
-                await saveEmp(newEmp); setIsEmpModalOpen(false);
-            };
+            const handleSaveEmployee = async (e) => { e.preventDefault(); const fd = new FormData(e.target); const newEmp = { id: editingEmp?editingEmp.id:Date.now(), name: fd.get('name'), empId: fd.get('empId'), title: fd.get('title'), department: fd.get('department'), baseSalary: Number(fd.get('baseSalary')), laborFee: Number(fd.get('laborFee')), healthFee: Number(fd.get('healthFee')), lastRaiseDate: (editingEmp && editingEmp.baseSalary === Number(fd.get('baseSalary'))) ? (editingEmp.lastRaiseDate||'') : new Date().toISOString().split('T')[0] }; await saveEmp(newEmp); setIsEmpModalOpen(false); };
             const deleteEmployee = (id) => { if(confirm('刪除?')) delEmp(id); };
-            const handleBulkSubmit = async (e) => { e.preventDefault(); const target = Number(bulkTargetSalary); if(!target) return; const today = new Date().toISOString().split('T')[0]; let c = 0; setEmployees(prev => prev.map(emp => { let ok = false; if(bulkFilterType==='all')ok=true; else if(bulkFilterType==='title' && emp.title.includes(String(bulkFilterValue)))ok=true; else if(bulkFilterType==='salary' && emp.baseSalary===Number(bulkFilterValue))ok=true; if(ok && e.baseSalary!==target) { c++; await saveEmp({...e, baseSalary: target, lastRaiseDate: today}); } } return emp; })); setIsBulkModalOpen(false); alert(`更新 ${c} 人`); };
-            
-            const handleExportPaymentList = () => {
-                const exportData = fullPayrollList.map((item, index) => ({ '序號': index+1, '部門': item.department, '員工編號': item.empId, '姓名': item.name, '職稱': item.title, '底薪': item.baseSalary, '實發': item.netPay }));
-                const ws = XLSX.utils.json_to_sheet(exportData); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "薪資單"); XLSX.writeFile(wb, "薪資單.xlsx");
-            };
+            const handleBulkSubmit = async (e) => { e.preventDefault(); const target = Number(bulkTargetSalary); if(!target) return; const today = new Date().toISOString().split('T')[0]; let c=0; for(let emp of employees) { let ok=false; if(bulkFilterType==='all')ok=true; else if(bulkFilterType==='title'&&emp.title.includes(String(bulkFilterValue)))ok=true; else if(bulkFilterType==='salary'&&emp.baseSalary===Number(bulkFilterValue))ok=true; if(ok && emp.baseSalary!==target) { c++; await saveEmp({...emp, baseSalary: target, lastRaiseDate: today}); } } setIsBulkModalOpen(false); alert(`更新 ${c} 人`); };
+            const handleExportPaymentList = () => { const exportData = fullPayrollList.map((item, index) => ({ '序號': index+1, '部門': item.department, '員工編號': item.empId, '姓名': item.name, '職稱': item.title, '底薪': item.baseSalary, '實發': item.netPay })); const ws = XLSX.utils.json_to_sheet(exportData); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "薪資單"); XLSX.writeFile(wb, "薪資單.xlsx"); };
 
             return (
                 <div className="min-h-screen pb-24 md:pb-10 bg-gray-50">
-                    {/* Desktop Nav */}
                     <nav className="bg-slate-800 text-white shadow-lg print-hidden sticky top-0 z-40 hidden md:block">
                         <div className="max-w-7xl mx-auto px-4 flex justify-between h-16 items-center">
-                            <div className="flex items-center space-x-2"><Icons.Calculator className="w-6 h-6 text-yellow-400"/><span className="font-bold text-xl">薪資管理系統 V28.1 雲端版</span></div>
+                            <div className="flex items-center space-x-2"><Icons.Calculator className="w-6 h-6 text-yellow-400"/><span className="font-bold text-xl">薪資管理系統 V28.2</span></div>
                             <div className="flex space-x-2">
-                                {user && <span className="flex items-center text-xs text-green-400 mr-4"><Icons.Cloud className="w-3 h-3 mr-1"/> 已同步</span>}
+                                {user && <span className="flex items-center text-xs text-green-400 mr-4"><Icons.Cloud className="w-3 h-3 mr-1"/> 雲端同步</span>}
                                 <button onClick={()=>setActiveTab('employees')} className={`px-3 py-1 rounded ${activeTab==='employees'?'bg-yellow-500 text-black':'hover:bg-slate-700'}`}>員工設定</button>
-                                <button onClick={()=>setActiveTab('input')} className={`px-3 py-1 rounded ${activeTab==='input'?'bg-yellow-500 text-black':'hover:bg-slate-700'}`}>薪資結算</button>
+                                <button onClick={()=>setActiveTab('input')} className={`px-3 py-1 rounded ${activeTab==='input'?'bg-yellow-500 text-black':'hover:bg-slate-700'}`}>結算</button>
                                 <button onClick={()=>setActiveTab('print')} className={`px-3 py-1 rounded ${activeTab==='print'?'bg-yellow-500 text-black':'hover:bg-slate-700'}`}>報表列印</button>
                             </div>
                         </div>
                     </nav>
-
-                    <div className="md:hidden bg-slate-800 text-white p-4 sticky top-0 z-40 flex justify-between items-center print-hidden">
-                        <span className="font-bold text-lg flex items-center">薪資管理 {user && <Icons.Cloud className="w-3 h-3 ml-2 text-green-400"/>}</span>
-                        <input type="month" value={currentPeriod} onChange={e=>setCurrentPeriod(e.target.value)} className="text-black text-sm rounded px-2 py-1"/>
-                    </div>
-
+                    <div className="md:hidden bg-slate-800 text-white p-4 sticky top-0 z-40 flex justify-between items-center print-hidden"><span className="font-bold text-lg flex items-center">薪資管理 {user && <Icons.Cloud className="w-3 h-3 ml-2 text-green-400"/>}</span><input type="month" value={currentPeriod} onChange={e=>setCurrentPeriod(e.target.value)} className="text-black text-sm rounded px-2 py-1"/></div>
                     <main className="max-w-7xl mx-auto p-4 md:p-8 print-block print:p-0 print:max-w-none">
                         {activeTab === 'employees' && (
                             <div className="space-y-4 animate-fade-in print-hidden">
-                                <div className="flex justify-between items-center">
-                                    <h2 className="text-xl font-bold text-gray-800 hidden md:block">員工資料</h2>
-                                    <div className="flex space-x-2 w-full md:w-auto">
-                                        <button onClick={()=>{setEditingEmp(null);setIsEmpModalOpen(true)}} className="flex-1 md:flex-none flex items-center justify-center bg-blue-600 text-white px-4 py-2 rounded shadow"><Icons.Plus className="w-4 h-4 mr-1"/> 新增</button>
-                                        <button onClick={()=>setIsBulkModalOpen(true)} className="flex-1 md:flex-none bg-orange-100 text-orange-700 px-4 py-2 rounded border border-orange-200">調薪</button>
-                                    </div>
-                                </div>
-                                <div className="grid grid-cols-1 gap-4 md:hidden">
-                                    {employees.map(e => (
-                                        <div key={e.id} className="bg-white p-4 rounded-lg shadow flex justify-between items-center border-l-4 border-blue-500">
-                                            <div><div className="font-bold text-lg">{e.name} <span className="text-sm text-gray-500">({e.empId})</span></div><div className="text-sm text-gray-600">{e.department} | {e.title}</div><div className="text-blue-600 font-bold mt-1">${formatNumber(e.baseSalary)}</div></div>
-                                            <div className="flex space-x-3"><button onClick={()=>{setEditingEmp(e);setIsEmpModalOpen(true)}}><Icons.Edit className="w-6 h-6 text-gray-400"/></button><button onClick={()=>deleteEmployee(e.id)}><Icons.Trash2 className="w-6 h-6 text-red-400"/></button></div>
-                                        </div>
-                                    ))}
-                                </div>
-                                <div className="hidden md:block bg-white rounded-xl shadow overflow-hidden">
-                                    <table className="min-w-full text-sm"><thead className="bg-slate-50 text-left"><tr><th className="p-3">部門</th><th className="p-3">編號</th><th className="p-3">姓名</th><th className="p-3">職位</th><th className="p-3">底薪</th><th className="p-3">操作</th></tr></thead><tbody>{employees.map(e => (<tr key={e.id} className="border-b hover:bg-slate-50"><td className="p-3">{e.department}</td><td className="p-3">{e.empId}</td><td className="p-3 font-bold">{e.name}</td><td className="p-3">{e.title}</td><td className="p-3 font-mono">${formatNumber(e.baseSalary)}</td><td className="p-3 space-x-2"><button onClick={()=>{setEditingEmp(e);setIsEmpModalOpen(true)}} className="text-blue-600">編輯</button><button onClick={()=>deleteEmployee(e.id)} className="text-red-600">刪除</button></td></tr>))}</tbody></table>
-                                </div>
+                                <div className="flex justify-between items-center"><h2 className="text-xl font-bold text-gray-800 hidden md:block">員工資料</h2><div className="flex space-x-2 w-full md:w-auto"><button onClick={()=>{setEditingEmp(null);setIsEmpModalOpen(true)}} className="flex-1 md:flex-none flex items-center justify-center bg-blue-600 text-white px-4 py-2 rounded shadow"><Icons.Plus className="w-4 h-4 mr-1"/> 新增</button><button onClick={()=>setIsBulkModalOpen(true)} className="flex-1 md:flex-none bg-orange-100 text-orange-700 px-4 py-2 rounded border border-orange-200">調薪</button></div></div>
+                                <div className="grid grid-cols-1 gap-4 md:hidden">{employees.map(e => (<div key={e.id} className="bg-white p-4 rounded-lg shadow flex justify-between items-center border-l-4 border-blue-500"><div><div className="font-bold text-lg">{e.name} <span className="text-sm text-gray-500">({e.empId})</span></div><div className="text-sm text-gray-600">{e.department} | {e.title}</div><div className="text-blue-600 font-bold mt-1">${formatNumber(e.baseSalary)}</div></div><div className="flex space-x-3"><button onClick={()=>{setEditingEmp(e);setIsEmpModalOpen(true)}}><Icons.Edit className="w-6 h-6 text-gray-400"/></button><button onClick={()=>deleteEmployee(e.id)}><Icons.Trash2 className="w-6 h-6 text-red-400"/></button></div></div>))}</div>
+                                <div className="hidden md:block bg-white rounded-xl shadow overflow-hidden"><table className="min-w-full text-sm"><thead className="bg-slate-50 text-left"><tr><th className="p-3">部門</th><th className="p-3">編號</th><th className="p-3">姓名</th><th className="p-3">職位</th><th className="p-3">底薪</th><th className="p-3">操作</th></tr></thead><tbody>{employees.map(e => (<tr key={e.id} className="border-b hover:bg-slate-50"><td className="p-3">{e.department}</td><td className="p-3">{e.empId}</td><td className="p-3 font-bold">{e.name}</td><td className="p-3">{e.title}</td><td className="p-3 font-mono">${formatNumber(e.baseSalary)}</td><td className="p-3 space-x-2"><button onClick={()=>{setEditingEmp(e);setIsEmpModalOpen(true)}} className="text-blue-600">編輯</button><button onClick={()=>deleteEmployee(e.id)} className="text-red-600">刪除</button></td></tr>))}</tbody></table></div>
                             </div>
                         )}
                         {activeTab === 'input' && (
                             <div className="space-y-4 animate-fade-in print-hidden">
-                                <div className="hidden md:flex justify-between mb-4">
-                                    <div className="flex items-center space-x-4"><input type="month" value={currentPeriod} onChange={e=>setCurrentPeriod(e.target.value)} className="border rounded px-2 py-1"/>{isLocked && <span className="text-red-600 font-bold bg-red-50 px-2 py-1 rounded">已結案</span>}<button onClick={toggleLock} className="text-sm underline text-gray-500">{isLocked ? '解鎖' : '鎖定'}</button></div>
-                                    <button onClick={()=>setIsImportModalOpen(true)} className={`px-4 py-2 bg-emerald-600 text-white rounded ${isLocked?'opacity-50':''}`} disabled={isLocked}>匯入 Excel</button>
-                                </div>
+                                <div className="hidden md:flex justify-between mb-4"><div className="flex items-center space-x-4"><input type="month" value={currentPeriod} onChange={e=>setCurrentPeriod(e.target.value)} className="border rounded px-2 py-1"/>{isLocked && <span className="text-red-600 font-bold bg-red-50 px-2 py-1 rounded">已結案</span>}<button onClick={toggleLock} className="text-sm underline text-gray-500">{isLocked ? '解鎖' : '鎖定'}</button></div><button onClick={()=>setIsImportModalOpen(true)} className={`px-4 py-2 bg-emerald-600 text-white rounded ${isLocked?'opacity-50':''}`} disabled={isLocked}>匯入 Excel</button></div>
                                 <div className="md:hidden flex justify-between items-center mb-2"><span className="text-gray-500 text-sm">{isLocked ? '🔒 本月已結案' : '🟢 編輯中'}</span><button onClick={toggleLock} className="text-xs bg-gray-200 px-2 py-1 rounded">{isLocked ? '解鎖' : '結案'}</button></div>
                                 {!isLocked && (<button onClick={()=>setIsImportModalOpen(true)} className="md:hidden w-full py-3 bg-emerald-100 text-emerald-700 font-bold rounded-lg border border-emerald-200 mb-4 flex items-center justify-center"><Icons.FileSpreadsheet className="w-5 h-5 mr-2"/> 匯入 Excel</button>)}
-                                <div className="grid grid-cols-1 gap-3 md:hidden">
-                                    {fullPayrollList.map(item => (
-                                        <div key={item.id} onClick={() => !isLocked && setMobileEditItem(item)} className="bg-white p-4 rounded-lg shadow active:bg-blue-50 transition border border-gray-100">
-                                            <div className="flex justify-between items-center"><div><div className="font-bold text-lg">{item.name}</div><div className="text-xs text-gray-500">實發薪資</div></div><div className="text-2xl font-bold text-blue-600">${formatNumber(item.netPay)}</div></div>
-                                            <div className="mt-3 pt-3 border-t flex justify-between text-xs text-gray-500"><span>加項: ${formatNumber(item.totalAdditions)}</span><span>扣項: ${formatNumber(item.finalDeduction)}</span><span>工時: {item.actualWorkHours}</span></div>
-                                            {!isLocked && <div className="text-center text-xs text-blue-400 mt-2">點擊編輯明細</div>}
-                                        </div>
-                                    ))}
-                                </div>
-                                <div className="hidden md:block bg-white rounded-xl shadow overflow-x-auto">
-                                    <table className="min-w-full text-xs whitespace-nowrap">
-                                        <thead className="bg-slate-100"><tr><th className="p-2 sticky left-0 bg-slate-100 z-10">員工</th><th className="p-2">實工</th><th className="p-2 bg-blue-50">平0.34</th><th className="p-2 bg-blue-50">平0.67</th><th className="p-2 bg-purple-50">例1.34</th><th className="p-2 bg-purple-50">例1.67</th><th className="p-2">提早</th><th className="p-2">未休</th><th className="p-2">休加</th><th className="p-2 text-green-700">午餐</th><th className="p-2 text-green-700">業務</th><th className="p-2 text-green-700">其它</th><th className="p-2 text-red-700">病0.5</th><th className="p-2 text-red-800">事1.0</th><th className="p-2 text-orange-700">勞健</th><th className="p-2 sticky right-0 bg-slate-100 z-10">實發</th></tr></thead>
-                                        <tbody>
-                                            {fullPayrollList.map(item => (
-                                                <tr key={item.id} className="border-b hover:bg-gray-50">
-                                                    <td className="p-2 sticky left-0 bg-white font-bold z-10">{item.name}</td>
-                                                    <td className="p-1"><input disabled={isLocked} className="w-14 border" value={item.actualWorkHours} onChange={e=>updateVal(item.empId,'actualWorkHours',e.target.value)} onBlur={e=>handleTimeBlur(item.empId,'actualWorkHours',e.target.value)}/></td>
-                                                    <td className="p-1 bg-blue-50"><input disabled={isLocked} className="w-12 border" value={item.wt034} onChange={e=>updateVal(item.empId,'wt034',e.target.value)} onBlur={e=>handleTimeBlur(item.empId,'wt034',e.target.value)}/></td>
-                                                    <td className="p-1 bg-blue-50"><input disabled={isLocked} className="w-12 border" value={item.wt067} onChange={e=>updateVal(item.empId,'wt067',e.target.value)} onBlur={e=>handleTimeBlur(item.empId,'wt067',e.target.value)}/></td>
-                                                    <td className="p-1 bg-purple-50"><input disabled={isLocked} className="w-12 border" value={item.hd134} onChange={e=>updateVal(item.empId,'hd134',e.target.value)} onBlur={e=>handleTimeBlur(item.empId,'hd134',e.target.value)}/></td>
-                                                    <td className="p-1 bg-purple-50"><input disabled={isLocked} className="w-12 border" value={item.hd167} onChange={e=>updateVal(item.empId,'hd167',e.target.value)} onBlur={e=>handleTimeBlur(item.empId,'hd167',e.target.value)}/></td>
-                                                    <td className="p-1"><input disabled={isLocked} className="w-12 border" value={item.earlyShift} onChange={e=>updateVal(item.empId,'earlyShift',e.target.value)} onBlur={e=>handleTimeBlur(item.empId,'earlyShift',e.target.value)}/></td>
-                                                    <td className="p-1"><input disabled={isLocked} className="w-12 border" value={item.noLunch} onChange={e=>updateVal(item.empId,'noLunch',e.target.value)} onBlur={e=>handleTimeBlur(item.empId,'noLunch',e.target.value)}/></td>
-                                                    <td className="p-1"><input disabled={isLocked} className="w-12 border" value={item.holidayOT} onChange={e=>updateVal(item.empId,'holidayOT',e.target.value)} onBlur={e=>handleTimeBlur(item.empId,'holidayOT',e.target.value)}/></td>
-                                                    <td className="p-1"><input type="number" disabled={isLocked} className="w-14 border" value={item.lunchAllowance} onChange={e=>updateVal(item.empId,'lunchAllowance',e.target.value)}/></td>
-                                                    <td className="p-1 bg-green-50"><input type="number" disabled={isLocked} className="w-14 border font-bold text-green-700" value={item.businessBonus} onChange={e=>updateVal(item.empId,'businessBonus',e.target.value)}/></td>
-                                                    <td className="p-1 bg-green-50"><input type="number" disabled={isLocked} className="w-14 border font-bold text-green-700" value={item.otherBonus} onChange={e=>updateVal(item.empId,'otherBonus',e.target.value)}/></td>
-                                                    <td className="p-1"><input disabled={isLocked} className="w-12 border" value={item.sickLeave} onChange={e=>updateVal(item.empId,'sickLeave',e.target.value)} onBlur={e=>handleTimeBlur(item.empId,'sickLeave',e.target.value)}/></td>
-                                                    <td className="p-1"><input disabled={isLocked} className="w-12 border" value={item.personalLeave} onChange={e=>updateVal(item.empId,'personalLeave',e.target.value)} onBlur={e=>handleTimeBlur(item.empId,'personalLeave',e.target.value)}/></td>
-                                                    <td className="p-1"><input type="number" disabled={isLocked} className="w-14 border" value={item.deduction} onChange={e=>updateVal(item.empId,'deduction',e.target.value)}/></td>
-                                                    <td className="p-2 sticky right-0 bg-white font-bold text-blue-700 z-10">${formatNumber(item.netPay)}</td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
+                                <div className="grid grid-cols-1 gap-3 md:hidden">{fullPayrollList.map(item => (<div key={item.id} onClick={() => !isLocked && setMobileEditItem(item)} className="bg-white p-4 rounded-lg shadow active:bg-blue-50 transition border border-gray-100"><div className="flex justify-between items-center"><div><div className="font-bold text-lg">{item.name}</div><div className="text-xs text-gray-500">實發薪資</div></div><div className="text-2xl font-bold text-blue-600">${formatNumber(item.netPay)}</div></div><div className="mt-3 pt-3 border-t flex justify-between text-xs text-gray-500"><span>加項: ${formatNumber(item.totalAdditions)}</span><span>扣項: ${formatNumber(item.finalDeduction)}</span><span>工時: {item.actualWorkHours}</span></div>{!isLocked && <div className="text-center text-xs text-blue-400 mt-2">點擊編輯明細</div>}</div>))}</div>
+                                <div className="hidden md:block bg-white rounded-xl shadow overflow-x-auto"><table className="min-w-full text-xs whitespace-nowrap"><thead className="bg-slate-100"><tr><th className="p-2 sticky left-0 bg-slate-100 z-10">員工</th><th className="p-2">實工</th><th className="p-2 bg-blue-50">平(0.34)</th><th className="p-2 bg-blue-50">平(0.67)</th><th className="p-2 bg-purple-50">例(1.34)</th><th className="p-2 bg-purple-50">例(1.67)</th><th className="p-2">提早</th><th className="p-2">未休</th><th className="p-2">休加</th><th className="p-2 text-green-700">午餐</th><th className="p-2 text-green-700">業務</th><th className="p-2 text-green-700">其它</th><th className="p-2 text-red-700">病0.5</th><th className="p-2 text-red-800">事1.0</th><th className="p-2 text-orange-700">勞健</th><th className="p-2 sticky right-0 bg-slate-100 z-10">實發</th></tr></thead><tbody>{fullPayrollList.map(item => (<tr key={item.id} className="border-b hover:bg-gray-50"><td className="p-2 sticky left-0 bg-white font-bold z-10">{item.name}</td><td className="p-1"><input disabled={isLocked} className="w-14 border" value={item.actualWorkHours} onChange={e=>updateVal(item.empId,'actualWorkHours',e.target.value)} onBlur={e=>handleTimeBlur(item.empId,'actualWorkHours',e.target.value)}/></td><td className="p-1 bg-blue-50"><input disabled={isLocked} className="w-12 border" value={item.wt034} onChange={e=>updateVal(item.empId,'wt034',e.target.value)} onBlur={e=>handleTimeBlur(item.empId,'wt034',e.target.value)}/></td><td className="p-1 bg-blue-50"><input disabled={isLocked} className="w-12 border" value={item.wt067} onChange={e=>updateVal(item.empId,'wt067',e.target.value)} onBlur={e=>handleTimeBlur(item.empId,'wt067',e.target.value)}/></td><td className="p-1 bg-purple-50"><input disabled={isLocked} className="w-12 border" value={item.hd134} onChange={e=>updateVal(item.empId,'hd134',e.target.value)} onBlur={e=>handleTimeBlur(item.empId,'hd134',e.target.value)}/></td><td className="p-1 bg-purple-50"><input disabled={isLocked} className="w-12 border" value={item.hd167} onChange={e=>updateVal(item.empId,'hd167',e.target.value)} onBlur={e=>handleTimeBlur(item.empId,'hd167',e.target.value)}/></td><td className="p-1"><input disabled={isLocked} className="w-12 border" value={item.earlyShift} onChange={e=>updateVal(item.empId,'earlyShift',e.target.value)} onBlur={e=>handleTimeBlur(item.empId,'earlyShift',e.target.value)}/></td><td className="p-1"><input disabled={isLocked} className="w-12 border" value={item.noLunch} onChange={e=>updateVal(item.empId,'noLunch',e.target.value)} onBlur={e=>handleTimeBlur(item.empId,'noLunch',e.target.value)}/></td><td className="p-1"><input disabled={isLocked} className="w-12 border" value={item.holidayOT} onChange={e=>updateVal(item.empId,'holidayOT',e.target.value)} onBlur={e=>handleTimeBlur(item.empId,'holidayOT',e.target.value)}/></td><td className="p-1"><input type="number" disabled={isLocked} className="w-14 border" value={item.lunchAllowance} onChange={e=>updateVal(item.empId,'lunchAllowance',e.target.value)}/></td><td className="p-1 bg-green-50"><input type="number" disabled={isLocked} className="w-14 border font-bold text-green-700" value={item.businessBonus} onChange={e=>updateVal(item.empId,'businessBonus',e.target.value)}/></td><td className="p-1 bg-green-50"><input type="number" disabled={isLocked} className="w-14 border font-bold text-green-700" value={item.otherBonus} onChange={e=>updateVal(item.empId,'otherBonus',e.target.value)}/></td><td className="p-1"><input disabled={isLocked} className="w-12 border" value={item.sickLeave} onChange={e=>updateVal(item.empId,'sickLeave',e.target.value)} onBlur={e=>handleTimeBlur(item.empId,'sickLeave',e.target.value)}/></td><td className="p-1"><input disabled={isLocked} className="w-12 border" value={item.personalLeave} onChange={e=>updateVal(item.empId,'personalLeave',e.target.value)} onBlur={e=>handleTimeBlur(item.empId,'personalLeave',e.target.value)}/></td><td className="p-1"><input type="number" disabled={isLocked} className="w-14 border" value={item.deduction} onChange={e=>updateVal(item.empId,'deduction',e.target.value)}/></td><td className="p-2 sticky right-0 bg-white font-bold text-blue-700 z-10">${formatNumber(item.netPay)}</td></tr>))}</tbody></table></div>
                             </div>
                         )}
 
@@ -552,16 +450,12 @@
                             <div className="print-block space-y-4 screen-preview-container">
                                 <div className="bg-white p-4 rounded shadow print-hidden col-span-full">
                                     <h2 className="text-lg font-bold mb-2">報表預覽 (電腦版：4欄卡片)</h2>
-                                    <div className="flex space-x-2">
-                                        <button onClick={handleExportPaymentList} className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-bold flex items-center justify-center"><Icons.Download className="w-5 h-5 mr-2"/> 匯出 Excel</button>
-                                        <button onClick={()=>window.print()} className="flex-1 py-3 bg-slate-800 hover:bg-slate-900 text-white rounded font-bold">列印薪資單</button>
-                                    </div>
+                                    <div className="flex space-x-2"><button onClick={handleExportPaymentList} className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-bold flex items-center justify-center"><Icons.Download className="w-5 h-5 mr-2"/> 匯出 Excel</button><button onClick={()=>window.print()} className="flex-1 py-3 bg-slate-800 hover:bg-slate-900 text-white rounded font-bold">列印薪資單</button></div>
                                 </div>
-                                
                                 <div id="print-container">
                                     {fullPayrollList.map(item => (
                                         <div key={item.id} className="payroll-slip">
-                                            <div className="slip-header"><div className="slip-title">{getTitle(currentPeriod)} 薪資單</div></div>
+                                            <div className="slip-header"><div className="print-title">{getTitle(currentPeriod)} 薪資單</div></div>
                                             <div className="emp-info"><span>{item.name} <span style={{fontSize:'12px', fontWeight:'normal'}}>({item.empId})</span></span><span className="print-label">{item.department}</span></div>
                                             <div className="slip-body">
                                                 <div>
@@ -591,10 +485,7 @@
                                             </div>
                                             <div className="slip-footer">
                                                 <div className="footer-row">
-                                                    <div className="footer-info">
-                                                        <p style={{fontWeight:'bold', marginBottom:'2px'}}>感謝您本月的辛勞！</p>
-                                                        工時:{item.actualWorkHours} / 應勤:{item.expectedHours}H<br/>特休:{item.annualLeave} | 喪假:{item.bereavementLeave}<br/>備註:{item.note}
-                                                    </div>
+                                                    <div className="footer-info"><p>感謝您本月的辛勞！</p>工時:{item.actualWorkHours}/應勤:{item.expectedHours}H<br/>特休:{item.annualLeave}|喪假:{item.bereavementLeave}<br/>備註:{item.note}</div>
                                                     <div style={{textAlign:'right'}}><span className="print-net-label">實發</span><span className="print-net-value">${formatNumber(item.netPay)}</span></div>
                                                 </div>
                                             </div>
@@ -603,15 +494,12 @@
                                 </div>
                             </div>
                         )}
-
                         {mobileEditItem && <div className="fixed inset-0 bg-white z-50 overflow-y-auto pb-safe print-hidden"><div className="sticky top-0 bg-slate-800 text-white p-4 flex justify-between items-center shadow"><div><div className="font-bold text-lg">{mobileEditItem.name}</div><div className="text-xs opacity-75">{currentPeriod} 編輯</div></div><button onClick={() => setMobileEditItem(null)} className="px-4 py-1 bg-slate-600 rounded">完成</button></div><div className="p-4 space-y-6"><div className="space-y-3"><h3 className="font-bold text-gray-500 border-b pb-1">工時紀錄</h3><div className="grid grid-cols-2 gap-4"><label className="block text-sm">應上班天數 <input type="number" className="w-full border rounded p-2 mt-1 bg-gray-50" value={mobileEditItem.expectedWorkDays} onChange={e=>updateVal(mobileEditItem.empId, 'expectedWorkDays', e.target.value)}/></label><label className="block text-sm">實際時數 <input type="text" className="w-full border rounded p-2 mt-1 bg-gray-50" value={mobileEditItem.actualWorkHours} onChange={e=>updateVal(mobileEditItem.empId, 'actualWorkHours', e.target.value)} onBlur={e=>handleTimeBlur(mobileEditItem.empId, 'actualWorkHours', e.target.value)}/></label></div></div><div className="space-y-3"><h3 className="font-bold text-blue-600 border-b pb-1">加班時數</h3><div className="grid grid-cols-2 gap-4"><label className="block text-sm">平加 0.34 <input type="text" className="w-full border rounded p-2 mt-1" value={mobileEditItem.wt034} onChange={e=>updateVal(mobileEditItem.empId, 'wt034', e.target.value)} onBlur={e=>handleTimeBlur(mobileEditItem.empId, 'wt034', e.target.value)}/></label><label className="block text-sm">平加 0.67 <input type="text" className="w-full border rounded p-2 mt-1" value={mobileEditItem.wt067} onChange={e=>updateVal(mobileEditItem.empId, 'wt067', e.target.value)} onBlur={e=>handleTimeBlur(mobileEditItem.empId, 'wt067', e.target.value)}/></label></div></div><div className="h-20"></div></div></div>}
-                        
                         {/* Modals */}
                         {isImportModalOpen && <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 print-hidden"><div className="bg-white p-6 rounded shadow-xl w-full max-w-lg"><h3 className="font-bold text-lg mb-4">匯入 Excel</h3><input type="file" ref={fileInputRef} accept=".xlsx,.csv" onChange={handleExcel} className="border p-2 w-full"/><button onClick={()=>setIsImportModalOpen(false)} className="mt-4 px-4 py-2 bg-gray-200 rounded">關閉</button></div></div>}
                         {isEmpModalOpen && <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 print-hidden"><div className="bg-white p-6 rounded shadow-xl w-full max-w-sm"><h3 className="font-bold text-lg mb-4">編輯員工</h3><form onSubmit={handleSaveEmployee} className="space-y-3"><input name="empId" defaultValue={editingEmp?.empId} placeholder="ID" className="border p-2 w-full"/><input name="name" defaultValue={editingEmp?.name} placeholder="姓名" className="border p-2 w-full"/><input name="title" defaultValue={editingEmp?.title} placeholder="職位" className="border p-2 w-full"/><input name="department" defaultValue={editingEmp?.department} placeholder="部門" className="border p-2 w-full"/><input name="baseSalary" type="number" defaultValue={editingEmp?.baseSalary} placeholder="底薪" className="border p-2 w-full"/><div className="flex justify-end gap-2"><button type="button" onClick={()=>setIsEmpModalOpen(false)} className="px-3 py-1 border rounded">取消</button><button className="px-3 py-1 bg-blue-600 text-white rounded">儲存</button></div></form></div></div>}
                         {isBulkModalOpen && <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 print-hidden"><div className="bg-white p-6 rounded shadow-xl w-full max-w-sm"><h3 className="font-bold text-lg mb-4">批量調薪</h3><form onSubmit={handleBulkSubmit} className="space-y-3"><input type="number" value={bulkTargetSalary} onChange={e=>setBulkTargetSalary(e.target.value)} className="border p-2 w-full" placeholder="新底薪"/><div className="flex justify-end gap-2"><button type="button" onClick={()=>setIsBulkModalOpen(false)} className="px-3 py-1 border rounded">取消</button><button className="px-3 py-1 bg-orange-600 text-white rounded">執行</button></div></form></div></div>}
                     </main>
-
                     <MobileNav activeTab={activeTab} setActiveTab={setActiveTab} />
                 </div>
             );
