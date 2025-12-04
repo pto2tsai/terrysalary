@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
@@ -664,7 +664,7 @@
                             }
                             if(emp) {
                                 const noteText = String(row[idx.note]||"");
-                                // V36.2: 提取假別時數
+                                // V36.3: 提取假別時數
                                 const leaves = parseLeave(noteText); 
                                 
                                 const entry = { 
@@ -712,7 +712,7 @@
                 <div className="min-h-screen pb-24 md:pb-10 bg-gray-50">
                     <nav className="bg-slate-800 text-white shadow-lg print-hidden sticky top-0 z-40 hidden md:block">
                         <div className="max-w-7xl mx-auto px-4 flex justify-between h-16 items-center">
-                            <div className="flex items-center space-x-2"><Icons.Calculator className="w-6 h-6 text-yellow-400"/><span className="font-bold text-xl">薪資管理系統 V36.2</span></div>
+                            <div className="flex items-center space-x-2"><Icons.Calculator className="w-6 h-6 text-yellow-400"/><span className="font-bold text-xl">薪資管理系統 V36.3</span></div>
                             <div className="flex space-x-2">
                                 {isOffline && <span className="offline-badge mr-2 animate-pulse">⚠️ 離線模式 (配額額滿)</span>}
                                 {user && !isOffline && <span className="flex items-center text-xs text-green-400 mr-4"><Icons.Cloud className="w-3 h-3 mr-1"/> 雲端同步</span>}
@@ -733,6 +733,26 @@
                         )}
                         {activeTab === 'input' && (
                             <div className="space-y-4 animate-fade-in print-hidden">
+                                <div className="bg-white p-4 rounded-lg shadow text-xs mb-4">
+                                    <h3 className="font-bold text-lg text-gray-700 border-b pb-1 mb-2">💰 結算公式說明 (V36.3)</h3>
+                                    <ul className="list-disc list-inside space-y-1 text-gray-600">
+                                        <li>**時薪計算**：`時薪 = 底薪 / 240` (四捨五入)。</li>
+                                        <li>**加班費**：`加班費 = 加班時數 × 時薪 × 倍率`。</li>
+                                        <li>**遲到扣款 (自動)**：
+                                            <ul className="list-circle list-inside ml-4">
+                                                <li>`遲到時數 = Max(0, (應出勤天數 * 8) - 實際出勤時數)`</li>
+                                                <li>`遲到扣款 = 遲到時數 × 時薪 × 1.0` (全額扣薪)。</li>
+                                            </ul>
+                                        </li>
+                                        <li>**請假扣款**：
+                                            <ul className="list-circle list-inside ml-4">
+                                                <li>`病假扣款 = 病假時數 (備註自動提取) × 時薪 × 0.5`</li>
+                                                <li>`事假扣款 = 事假時數 (備註自動提取) × 時薪 × 1.0`</li>
+                                            </ul>
+                                        </li>
+                                        <li>**假別自動提取**：系統會從 Excel 的「備註」欄位中，自動識別並代入「特休」、「病假」、「事假」、「喪假」時數。</li>
+                                    </ul>
+                                </div>
                                 <div className="hidden md:flex justify-between mb-4"><div className="flex items-center space-x-4"><input type="month" value={currentPeriod} onChange={e=>setCurrentPeriod(e.target.value)} className="border rounded px-2 py-1"/>{isLocked && <span className="text-red-600 font-bold bg-red-50 px-2 py-1 rounded">已結案</span>}<button onClick={toggleLock} className="text-sm underline text-gray-500">{isLocked ? '解鎖' : '鎖定'}</button></div><button onClick={()=>setIsImportModalOpen(true)} className={`px-4 py-2 bg-emerald-600 text-white rounded ${isLocked?'opacity-50':''}`} disabled={isLocked}>匯入 Excel</button></div>
                                 <div className="md:hidden flex justify-between items-center mb-2"><span className="text-gray-500 text-sm">{isLocked ? '🔒 本月已結案' : '🟢 編輯中'}</span><button onClick={toggleLock} className="text-xs bg-gray-200 px-2 py-1 rounded">{isLocked ? '解鎖' : '結案'}</button></div>
                                 {!isLocked && (<button onClick={()=>setIsImportModalOpen(true)} className="md:hidden w-full py-3 bg-emerald-100 text-emerald-700 font-bold rounded-lg border border-emerald-200 mb-4 flex items-center justify-center"><Icons.FileSpreadsheet className="w-5 h-5 mr-2"/> 匯入 Excel</button>)}
@@ -743,7 +763,7 @@
                                             <tr>
                                                 <th className="p-2 sticky left-0 bg-slate-100 z-10">員工</th><th className="p-2">實工</th><th className="p-2 bg-blue-50">平(1.34)</th><th className="p-2 bg-blue-50">平(1.67)</th><th className="p-2 bg-purple-50">例(1.34)</th><th className="p-2 bg-purple-50">例(1.67)</th><th className="p-2">提早</th><th className="p-2">未休</th><th className="p-2">休加</th><th className="p-2 text-green-700">午餐</th><th className="p-2 text-green-700">業務</th><th className="p-2 text-green-700">其它</th>
                                                 
-                                                {/* V36.2: 假別欄位 */}
+                                                {/* V36.2: 假別欄位 (已修正邏輯，這裡為顯示自動代入值) */}
                                                 <th className="p-2 text-red-700 bg-red-100">病假</th>
                                                 <th className="p-2 text-red-800 bg-red-100">事假</th>
                                                 <th className="p-2 text-red-900 bg-red-50">曠職</th>
@@ -771,7 +791,7 @@
                                                     <td className="p-1 bg-red-100"><input disabled={isLocked} className="w-12 border" value={item.sickLeave} onChange={e=>updateVal(item.empId,'sickLeave',e.target.value)} onBlur={e=>handleTimeBlur(item.empId,'sickLeave',e.target.value)}/></td>
                                                     <td className="p-1 bg-red-100"><input disabled={isLocked} className="w-12 border" value={item.personalLeave} onChange={e=>updateVal(item.empId,'personalLeave',e.target.value)} onBlur={e=>handleTimeBlur(item.empId,'personalLeave',e.target.value)}/></td>
                                                     
-                                                    {/* 曠職時數 (手動輸入) */}
+                                                    {/* 曠職時數 (手動輸入) - 遲到時數是自動計算的結果，不需輸入框 */}
                                                     <td className="p-1 bg-red-50"><input disabled={isLocked} className="w-12 border text-red-800 font-bold" value={item.absentTime || "00:00"} onChange={e=>updateVal(item.empId,'absentTime',e.target.value)} onBlur={e=>handleTimeBlur(item.empId,'absentTime',e.target.value)}/></td>
 
                                                     <td className="p-1"><input type="number" disabled={isLocked} className="w-14 border" value={item.deduction} onChange={e=>updateVal(item.empId,'deduction',e.target.value)}/></td>
@@ -823,7 +843,7 @@
                                                         <div>
                                                             <div className="section-title">應扣項目 (-)</div>
                                                             {(safeNum(item.insuranceFee) > 0) && <div className="item-row"><span className="item-label">勞健保費</span><span className="item-value text-red-700">${formatNumber(item.insuranceFee)}</span></div>}
-                                                            {item.dedAbsence > 0 && <div className="item-row"><span className="item-label">缺勤扣款</span><span className="item-value text-red-700">${formatNumber(item.dedAbsence)}</span></div>}
+                                                            {item.dedAbsent > 0 && <div className="item-row"><span className="item-label">缺勤扣款</span><span className="item-value text-red-700">${formatNumber(item.dedAbsent)}</span></div>}
                                                             {item.dedSick > 0 && <div className="item-row"><span className="item-label">病假扣款</span><span className="item-value text-red-700">${formatNumber(item.dedSick)}</span></div>}
                                                             {item.dedPersonal > 0 && <div className="item-row"><span className="item-label">事假扣款</span><span className="item-value text-red-700">${formatNumber(item.dedPersonal)}</span></div>}
                                                             
