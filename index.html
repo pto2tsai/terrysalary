@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>薪資管理系統 (V36.1 - 災難恢復版)</title>
+    <title>薪資管理系統 (V36.1 - 邏輯修正版)</title>
     
     <!-- 1. 引入樣式與核心庫 -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -56,7 +56,7 @@
             overflow: hidden; /* 關鍵：防止內容溢出破壞版面 */
         }
 
-        /* --- 字體與排版設定 (V36.1 修正版) --- */
+        /* --- 字體與排版設定 (V36.0 修正版) --- */
         
         /* 1. 標題：30px (極大) */
         .slip-title { 
@@ -330,17 +330,26 @@
 
             const dedSick = Math.round(timeStrToHours(d.sickLeave) * 0.5 * hourlyRate);
             const dedPersonal = Math.round(timeStrToHours(d.personalLeave) * 1.0 * hourlyRate);
-            const dedLate = Math.round(timeStrToHours(d.lateTime) * 1.0 * hourlyRate); // 遲到扣款
-            const dedAbsent = Math.round(timeStrToHours(d.absentTime) * 1.0 * hourlyRate); // 曠職扣款
-
+            
+            // 1. 計算遲到時數 (應出勤 - 實出勤)
             const expectedHours = safeNum(d.expectedWorkDays) * 8; 
             const actualHoursVal = timeStrToHours(d.actualWorkHours);
+            const calcLateHours = Math.max(0, expectedHours - actualHoursVal); // 應出勤 - 實出勤
+            const dedLate = Math.round(calcLateHours * 1.0 * hourlyRate); // 遲到扣款 (全額)
+
+            const dedAbsent = Math.round(timeStrToHours(d.absentTime) * 1.0 * hourlyRate); // 曠職扣款 (保留手動欄位)
+
+            const leaveHoursVal = timeStrToHours(d.annualLeave) + timeStrToHours(d.bereavementLeave);
+            // totalValidHours 邏輯已不再用於遲到扣款，改用上述直觀公式
             
             let insuranceFee = d.hasImportedInsurance ? safeNum(d.deduction) : (safeNum(emp.laborFee) + safeNum(emp.healthFee));
+            // finalDeduction 包含遲到扣款
             let finalDeduction = dedSick + dedPersonal + dedLate + dedAbsent + insuranceFee + (d.hasImportedInsurance ? 0 : safeNum(d.deduction));
+            
             return { 
                 hourlyRate, payWt034, payWt067, payHd134, payHd167, payEarly, payNoLunch, payHolidayOT, 
                 dedSick, dedPersonal, dedLate, dedAbsent, 
+                calcLateHours, // 傳出計算後的遲到時數
                 expectedHours, totalAdditions, finalDeduction, netPay: grossPay - finalDeduction, insuranceFee, grossPay 
             };
         }
@@ -412,6 +421,7 @@
             const [bulkFilterValue, setBulkFilterValue] = useState(28590);
             const fileInputRef = useRef(null);
             
+            // 新增：勾選狀態
             const [selectedEmpIds, setSelectedEmpIds] = useState(new Set());
 
             // Firebase Init
