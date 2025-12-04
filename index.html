@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>薪資管理系統 (V37.1 - 假別扣款修正版)</title>
+    <title>薪資管理系統 (V37.2 - 完整時數導入版)</title>
     
     <!-- 1. 引入樣式與核心庫 -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -219,18 +219,25 @@
         }
         function excelTimeToString(val) { if (typeof val === 'number') { const t = val * 24; const h = Math.floor(t); const m = Math.round((t - h) * 60); return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`; } return formatInputTime(val); }
         
-        // V36.3: 假別自動判讀
+        // V36.3: 假別自動判讀 (從備註欄位提取)
         function parseLeave(note) {
             let sickHours=0, personalHours=0, annualHours=0, bereavementHours=0;
             if (!note) return { sickLeave: "00:00", personalLeave: "00:00", annualLeave: "00:00", bereavementLeave: "00:00" };
             const str = note.toString();
+            // 匹配格式: (假別) (時數):(分鐘) 或 (假別) (時數).(小數)
             const regex = /(病假|事假|曠職|扣薪|特休|年假|喪假)\s*(\d+)([:\.](\d+))?/gi;
             let match;
             while ((match = regex.exec(str)) !== null) {
                 const type = match[1];
                 const hours = parseInt(match[2]) || 0;
                 const minutes = parseInt(match[4]) || 0;
-                const totalHours = hours + minutes / 60;
+                let totalHours = hours;
+                if (match[3] && match[3].includes(':')) { // Time format HH:MM
+                    totalHours = hours + minutes / 60;
+                } else if (match[3] && match[3].includes('.')) { // Decimal format H.XX (e.g. 8.5 hours)
+                    totalHours = hours + minutes / 100; // Assuming .XX is decimal hours, not minutes.
+                }
+
                 if (type.includes("特休") || type.includes("年假")) annualHours += totalHours;
                 else if (type.includes("病假")) sickHours += totalHours;
                 else if (type.includes("事假") || type.includes("扣薪") || type.includes("曠職")) personalHours += totalHours;
@@ -245,7 +252,7 @@
             return chunked;
         }
 
-        // 3. Salary Calculation (V37.1: Fix dedLate logic to prevent double counting leave hours)
+        // 3. Salary Calculation (V37.2: Logic confirmed for dedLate to avoid double counting)
         function calculateSalary(emp, data) {
             if (!emp) return null;
             const d = data || {};
@@ -273,18 +280,19 @@
             const dedSick = Math.round(timeStrToHours(d.sickLeave) * 0.5 * hourlyRate);
             const dedPersonal = Math.round(timeStrToHours(d.personalLeave) * 1.0 * hourlyRate);
             
-            // V37.1 FIX: Prevent double-counting of leave hours when calculating unaccounted missing time (dedLate).
+            // V37.1 FIX: Prevent double-counting of leave hours when calculating unaccounted missing time.
             // Add back all paid/deducted leave hours to the actual working hours to see if the EXPECTED hours are met.
             const totalLeaveHours = timeStrToHours(d.sickLeave) + timeStrToHours(d.personalLeave) + timeStrToHours(d.annualLeave) + timeStrToHours(d.bereavementLeave);
             const effectiveActualHours = actualHoursVal + totalLeaveHours; 
 
             let calcLateHoursVal = 0; 
+            // dedLate = 未被請假說明的短缺工時
             if (expectedHoursVal > 0 && effectiveActualHours < expectedHoursVal) {
                 calcLateHoursVal = expectedHoursVal - effectiveActualHours;
             }
             
             const dedLate = Math.round(calcLateHoursVal * 1.0 * hourlyRate); // Deduction for unaccounted missing time
-            const dedAbsent = Math.round(timeStrToHours(d.absentTime) * 1.0 * hourlyRate); // 曠職扣款 (手動輸入)
+            const dedAbsent = Math.round(timeStrToHours(d.absentTime) * 1.0 * hourlyRate); // 曠職扣款 (手動輸入，獨立於 dedLate)
 
             let insuranceFee = d.hasImportedInsurance ? safeNum(d.deduction) : (safeNum(emp.laborFee) + safeNum(emp.healthFee));
             let finalDeduction = dedSick + dedPersonal + dedLate + dedAbsent + insuranceFee + (d.hasImportedInsurance ? 0 : safeNum(d.deduction));
@@ -548,7 +556,7 @@
             const toggleSelectAll = () => { if (selectedEmpIds.size === sortedEmployees.length) setSelectedEmpIds(new Set()); else setSelectedEmpIds(new Set(sortedEmployees.map(e => e.id))); };
             const toggleSelect = (id) => { const newSet = new Set(selectedEmpIds); if (newSet.has(id)) newSet.delete(id); else newSet.add(id); setSelectedEmpIds(newSet); };
 
-            // Excel Import
+            // Excel Import (V37.2: Enhanced mapping for dedicated leave time columns)
             const handleExcel = (e) => {
                 if (isLocked) { alert("本月已結案"); return; }
                 const file = e.target.files[0]; if (!file) return;
@@ -563,26 +571,36 @@
                         
                         const headers = data[hRow];
                         
-                        // V37.1 Fix: Added otherBonus field and checked/corrected header matching logic
-                        const idx = { id:-1, name:-1, wt034:-1, wt067:-1, hd134:-1, hd167:-1, early:-1, noLunch:-1, holidayOT:-1, lunch:-1, businessBonus:-1, otherBonus:-1, ins:-1, note:-1, expHours:-1, actHours:-1, annual:-1, dept:-1, base:-1, expDays:-1 };
+                        // V37.2: Added explicit indices for leave hours (sickH, personalH, annualH, bereavementH)
+                        const idx = { id:-1, name:-1, wt034:-1, wt067:-1, hd134:-1, hd167:-1, early:-1, noLunch:-1, holidayOT:-1, lunch:-1, businessBonus:-1, otherBonus:-1, ins:-1, note:-1, expHours:-1, actHours:-1, annual:-1, dept:-1, base:-1, expDays:-1, sickH:-1, personalH:-1, annualH:-1, bereavementH:-1 };
+
                         headers.forEach((h, i) => {
                             const t = String(h).trim();
                             if(t.includes("員工編號")) idx.id = i; 
                             else if(t.includes("員工姓名")) idx.name = i; 
                             else if(t.includes("部門")) idx.dept = i; 
                             else if(t.includes("基本底薪")||(t.includes("底薪")&&!t.includes("實發"))) idx.base = i;
+                            // 加班時數
                             else if(t.includes("提前")) idx.early = i; 
                             else if(t.includes("中午")) idx.noLunch = i; 
                             else if(t.includes("星期日")) idx.holidayOT = i;
+                            // 津貼
                             else if(t.includes("午餐")||t.includes("津貼")) idx.lunch = i; 
-                            else if(t.includes("業務")||t.includes("職務")) idx.businessBonus = i; // V37.1 Use businessBonus
-                            else if(t.includes("其它加項")||t.includes("其他加項")||t.includes("其他津貼")) idx.otherBonus = i; // V37.1 Map otherBonus
+                            else if(t.includes("業務")||t.includes("職務")) idx.businessBonus = i; 
+                            else if(t.includes("其它加項")||t.includes("其他加項")||t.includes("其他津貼")) idx.otherBonus = i; 
+                            // 扣款
                             else if(t.includes("勞健保")) idx.ins = i; 
-                            else if(t.includes("備註")) idx.note = i;
+                            // 時數
                             else if(t.includes("應上班")&&t.includes("天數")) idx.expDays = i; 
                             else if(t.includes("應上班")) idx.expHours = i;
                             else if(t.includes("實上班")||t.includes("實際出勤")) { if(t.includes("時數")) idx.actHours = i; }
-                            else if(t.includes("特休")&&!t.includes("備註")) idx.annual = i; 
+                            
+                            // V37.2: 假別時數 - 優先匹配獨立欄位
+                            else if(t.includes("病假")&&(t.includes("時數")||t.includes("小時"))) idx.sickH = i;
+                            else if(t.includes("事假")&&(t.includes("時數")||t.includes("小時"))) idx.personalH = i;
+                            else if((t.includes("特休")||t.includes("年假"))&&(t.includes("時數")||t.includes("小時"))) idx.annualH = i;
+                            else if(t.includes("喪假")&&(t.includes("時數")||t.includes("小時"))) idx.bereavementH = i;
+
                             if(t.includes("平日")&&(t.includes("0.34")||t.includes("0.33"))&&idx.wt034===-1) idx.wt034=i;
                             if(t.includes("平日")&&(t.includes("0.67")||t.includes("0.66"))&&idx.wt067===-1) idx.wt067=i;
                             if((t.includes("例假")||t.includes("假日"))&&(t.includes("1.34")||t.includes("1.33"))&&idx.hd134===-1) idx.hd134=i;
@@ -613,27 +631,44 @@
                             }
                             if(emp) {
                                 const noteText = String(row[idx.note]||"");
-                                const leaves = parseLeave(noteText); 
+                                // 提取備註欄位的假別作為後備
+                                const parsedLeaves = parseLeave(noteText); 
                                 
+                                // V37.2: 決定最終假別時數 (優先使用獨立欄位，否則使用備註解析結果)
+                                const sickLeaveTime = idx.sickH !== -1 && row[idx.sickH] ? excelTimeToString(row[idx.sickH]) : parsedLeaves.sickLeave;
+                                const personalLeaveTime = idx.personalH !== -1 && row[idx.personalH] ? excelTimeToString(row[idx.personalH]) : parsedLeaves.personalLeave;
+                                const annualLeaveTime = idx.annualH !== -1 && row[idx.annualH] ? excelTimeToString(row[idx.annualH]) : parsedLeaves.annualLeave;
+                                const bereavementLeaveTime = idx.bereavementH !== -1 && row[idx.bereavementH] ? excelTimeToString(row[idx.bereavementH]) : parsedLeaves.bereavementLeave;
+
                                 const entry = { 
                                     empId: emp.empId, period: currentPeriod, 
+                                    // 加班/未休時數
                                     wt034: idx.wt034!==-1?excelTimeToString(row[idx.wt034]):"00:00", 
                                     wt067: idx.wt067!==-1?excelTimeToString(row[idx.wt067]):"00:00", 
                                     hd134: idx.hd134!==-1?excelTimeToString(row[idx.hd134]):"00:00", 
                                     hd167: idx.hd167!==-1?excelTimeToString(row[idx.hd167]):"00:00", 
-                                    earlyShift: excelTimeToString(row[idx.early]), 
-                                    noLunch: excelTimeToString(row[idx.noLunch]), 
-                                    holidayOT: excelTimeToString(row[idx.holidayOT]), 
-                                    lunchAllowance: parseInt(row[idx.lunch])||0, 
-                                    businessBonus: parseInt(row[idx.businessBonus])||0, // V37.1 Use businessBonus
-                                    otherBonus: parseInt(row[idx.otherBonus])||0, // V37.1 Map otherBonus
-                                    deduction: parseInt(row[idx.ins])||0, 
-                                    hasImportedInsurance: !!(parseInt(row[idx.ins])), 
+                                    earlyShift: idx.early!==-1?excelTimeToString(row[idx.early]):"00:00", 
+                                    noLunch: idx.noLunch!==-1?excelTimeToString(row[idx.noLunch]):"00:00", 
+                                    holidayOT: idx.holidayOT!==-1?excelTimeToString(row[idx.holidayOT]):"00:00", 
+                                    
+                                    // 假別時數 (已優先處理)
+                                    sickLeave: sickLeaveTime, 
+                                    personalLeave: personalLeaveTime, 
+                                    annualLeave: annualLeaveTime, 
+                                    bereavementLeave: bereavementLeaveTime, 
+
+                                    // 津貼
+                                    lunchAllowance: idx.lunch!==-1 ? parseInt(row[idx.lunch])||0 : 0, 
+                                    businessBonus: idx.businessBonus!==-1 ? parseInt(row[idx.businessBonus])||0 : 0, 
+                                    otherBonus: idx.otherBonus!==-1 ? parseInt(row[idx.otherBonus])||0 : 0, 
+                                    
+                                    // 考勤/扣款
+                                    deduction: idx.ins!==-1 ? parseInt(row[idx.ins])||0 : 0, 
+                                    hasImportedInsurance: !!(idx.ins!==-1 && parseInt(row[idx.ins])), 
                                     expectedWorkHours: idx.expHours !== -1 ? excelTimeToString(row[idx.expHours]) : "00:00",
-                                    actualWorkHours: excelTimeToString(row[idx.actHours]), 
+                                    actualWorkHours: idx.actHours !== -1 ? excelTimeToString(row[idx.actHours]) : "00:00", 
                                     lateTime: "00:00", 
                                     absentTime: "00:00", 
-                                    ...leaves, 
                                     note: noteText 
                                 };
                                 await savePay(entry); count++;
@@ -697,7 +732,7 @@
                 <div className="min-h-screen pb-24 md:pb-10 bg-gray-50">
                     <nav className="bg-slate-800 text-white shadow-lg print-hidden sticky top-0 z-40 hidden md:block">
                         <div className="max-w-7xl mx-auto px-4 flex justify-between h-16 items-center">
-                            <div className="flex items-center space-x-2"><Icons.Calculator className="w-6 h-6 text-yellow-400"/><span className="font-bold text-xl">薪資管理系統 V37.1</span></div>
+                            <div className="flex items-center space-x-2"><Icons.Calculator className="w-6 h-6 text-yellow-400"/><span className="font-bold text-xl">薪資管理系統 V37.2</span></div>
                             <div className="flex space-x-2">
                                 {isOffline && <span className="offline-badge mr-2 animate-pulse">⚠️ 離線模式 (配額額滿)</span>}
                                 {user && !isOffline && <span className="flex items-center text-xs text-green-400 mr-4"><Icons.Cloud className="w-3 h-3 mr-1"/> 雲端同步</span>}
@@ -719,7 +754,7 @@
                         {activeTab === 'input' && (
                             <div className="space-y-4 animate-fade-in print-hidden">
                                 <div className="bg-white p-4 rounded-lg shadow text-xs mb-4">
-                                    <h3 className="font-bold text-lg text-gray-700 border-b pb-1 mb-2">💰 結算公式說明 (V37.1)</h3>
+                                    <h3 className="font-bold text-lg text-gray-700 border-b pb-1 mb-2">💰 結算公式說明 (V37.2)</h3>
                                     <ul className="list-disc list-inside space-y-1 text-gray-600">
                                         <li>**時薪計算**：`時薪 = 底薪 / 240` (四捨五入)。</li>
                                         <li>**加班費**：`加班費 = 加班時數 × 時薪 × 倍率`。</li>
@@ -733,8 +768,8 @@
                                         </li>
                                         <li>**請假扣款**：
                                             <ul className="list-circle list-inside ml-4">
-                                                <li>`病假扣款 = 病假時數 (備註自動提取) × 時薪 × 0.5`</li>
-                                                <li>`事假扣款 = 事假時數 (備註自動提取) × 時薪 × 1.0`</li>
+                                                <li>`病假扣款 = 病假時數 (獨立欄位或備註自動提取) × 時薪 × 0.5`</li>
+                                                <li>`事假扣款 = 事假時數 (獨立欄位或備註自動提取) × 時薪 × 1.0`</li>
                                             </ul>
                                         </li>
                                     </ul>
