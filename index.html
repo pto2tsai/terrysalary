@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>薪資管理系統 (V36.2 - 邏輯修正版)</title>
+    <title>薪資管理系統 (V36.3 - 最終邏輯版)</title>
     
     <!-- 1. 引入樣式與核心庫 -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -311,7 +311,7 @@
             if (!note) return { sickLeave: "00:00", personalLeave: "00:00", annualLeave: "00:00", bereavementLeave: "00:00" };
             const str = note.toString();
             // 匹配格式如: "事假16:00", "病假8", "特休 4.5", "喪假 16"
-            const regex = /(病假|事假|特休|年假|喪假)\s*(\d+)([:\.](\d+))?/gi;
+            const regex = /(病假|事假|曠職|扣薪|特休|年假|喪假)\s*(\d+)([:\.](\d+))?/gi;
             
             let match;
             while ((match = regex.exec(str)) !== null) {
@@ -326,8 +326,8 @@
                     annual = timeStr;
                 } else if (type.includes("病假")) {
                     sick = timeStr;
-                } else if (type.includes("事假")) {
-                    personal = timeStr;
+                } else if (type.includes("事假") || type.includes("扣薪") || type.includes("曠職")) {
+                    personal = timeStr; // 暫時歸為事假，用於扣款計算
                 } else if (type.includes("喪假")) {
                     bereavement = timeStr;
                 }
@@ -744,7 +744,7 @@
                                         <thead className="bg-slate-100">
                                             <tr>
                                                 <th className="p-2 sticky left-0 bg-slate-100 z-10">員工</th><th className="p-2">實工</th><th className="p-2 bg-blue-50">平(1.34)</th><th className="p-2 bg-blue-50">平(1.67)</th><th className="p-2 bg-purple-50">例(1.34)</th><th className="p-2 bg-purple-50">例(1.67)</th><th className="p-2">提早</th><th className="p-2">未休</th><th className="p-2">休加</th><th className="p-2 text-green-700">午餐</th><th className="p-2 text-green-700">業務</th><th className="p-2 text-green-700">其它</th><th className="p-2 text-red-700">病0.5</th><th className="p-2 text-red-800">事1.0</th>
-                                                <th className="p-2 text-red-900 bg-red-50">遲到</th><th className="p-2 text-red-900 bg-red-50">曠職</th>
+                                                <th className="p-2 text-red-900 bg-red-50">曠職</th>
                                                 <th className="p-2 text-orange-700">勞健</th><th className="p-2 sticky right-0 bg-slate-100 z-10">實發</th>
                                             </tr>
                                         </thead>
@@ -766,8 +766,9 @@
                                                     <td className="p-1"><input disabled={isLocked} className="w-12 border" value={item.sickLeave} onChange={e=>updateVal(item.empId,'sickLeave',e.target.value)} onBlur={e=>handleTimeBlur(item.empId,'sickLeave',e.target.value)}/></td>
                                                     <td className="p-1"><input disabled={isLocked} className="w-12 border" value={item.personalLeave} onChange={e=>updateVal(item.empId,'personalLeave',e.target.value)} onBlur={e=>handleTimeBlur(item.empId,'personalLeave',e.target.value)}/></td>
                                                     
-                                                    {/* 新增：遲到與曠職輸入欄位 */}
-                                                    <td className="p-1 bg-red-50"><input disabled={isLocked} className="w-12 border text-red-800 font-bold" value={item.lateTime || "00:00"} onChange={e=>updateVal(item.empId,'lateTime',e.target.value)} onBlur={e=>handleTimeBlur(item.empId,'lateTime',e.target.value)}/></td>
+                                                    {/* 遲到時數 (自動計算，只讀) */}
+                                                    <td className="p-1 bg-red-50"><input disabled className="w-12 border text-red-800 font-bold input-locked" value={item.calcLateHoursStr} /></td>
+                                                    {/* 曠職時數 (手動輸入) */}
                                                     <td className="p-1 bg-red-50"><input disabled={isLocked} className="w-12 border text-red-800 font-bold" value={item.absentTime || "00:00"} onChange={e=>updateVal(item.empId,'absentTime',e.target.value)} onBlur={e=>handleTimeBlur(item.empId,'absentTime',e.target.value)}/></td>
 
                                                     <td className="p-1"><input type="number" disabled={isLocked} className="w-14 border" value={item.deduction} onChange={e=>updateVal(item.empId,'deduction',e.target.value)}/></td>
