@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>薪資管理系統 (V37.3 - 最終時數導入版)</title>
+    <title>薪資管理系統 (V37.7 - 最終穩定版)</title>
     
     <!-- 1. 引入樣式與核心庫 -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -12,7 +12,7 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
     
-    <!-- 2. 引入 Firebase SDK -->
+    <!-- 2. 引入 Firebase SDK (保持原樣) -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
@@ -44,8 +44,8 @@
         /* --- 薪資單卡片樣式 (共用) --- */
         .payroll-slip-style {
             background: white;
-            border: 3px double #000; /* 專業雙線邊框 */
-            padding: 10px 15px; /* 上下內距縮小，爭取空間 */
+            border: 3px double #000;
+            padding: 10px 15px;
             box-sizing: border-box;
             display: flex;
             flex-direction: column;
@@ -53,7 +53,7 @@
             color: #000;
             position: relative;
             width: 100%;
-            overflow: hidden; /* 關鍵：防止內容溢出破壞版面 */
+            overflow: hidden;
         }
 
         /* --- 字體與排版設定 (V36.4 設定保持) --- */
@@ -103,7 +103,7 @@
             justify-content: space-between; 
             align-items: center; 
             line-height: 1.3; 
-            margin-bottom: 1px; /* 極窄行距 */
+            margin-bottom: 1px;
         }
         .item-label { font-size: 14px !important; font-weight: 700 !important; text-align: left; }
         .item-value { font-size: 16px !important; font-weight: 800 !important; font-family: Consolas, monospace; text-align: right; }
@@ -128,8 +128,6 @@
             justify-content: space-between;
         }
         .footer-main { display: flex; justify-content: space-between; alignItems: flex-end; width: 100%; }
-        .footer-info { font-size: 11px !important; font-weight: 600; line-height: 1.3; width: 100%; }
-        
         .net-pay-label { font-size: 18px !important; font-weight: 800; margin-right: 5px; }
         .net-pay-value { 
             font-size: 32px !important; 
@@ -144,10 +142,8 @@
 
         /* --- 螢幕預覽專用 --- */
         @media screen {
-            .print-page-wrapper { display: flex; flex-direction: column; align-items: center; gap: 30px; padding: 20px; }
             .print-page { width: 210mm; height: 296mm; background: white; padding: 5mm; box-sizing: border-box; display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 5mm; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5); }
             @media (max-width: 1023px) {
-                .print-page-wrapper { padding: 10px; gap: 10px; }
                 .print-page { width: 100%; height: auto; display: grid; grid-template-columns: 1fr; gap: 15px; box-shadow: none; background: transparent; padding: 0; }
                 .payroll-slip-style { height: auto !important; min-height: 400px; border: 1px solid #ccc; }
             }
@@ -184,7 +180,7 @@
     <script type="text/babel">
         const { useState, useMemo, useEffect, useRef } = React;
 
-        // 1. Firebase Config
+        // 1. Firebase Config (使用範例設定)
         const USER_FIREBASE_CONFIG = {
           apiKey: "AIzaSyDvu-VONOJoj251pMPMXRfT_L4uVDJS4Q8",
           authDomain: "terrysalary.firebaseapp.com",
@@ -209,7 +205,7 @@
         }
         
         function safeNum(val) { const num = Number(val); return isNaN(num) ? 0 : num; }
-        function timeStrToHours(str) { if (!str) return 0; const [h, m] = String(str).split(':').map(Number); return (safeNum(h)) + (safeNum(m))/60; }
+        function timeStrToHours(str) { if (!str) return 0; const parts = String(str).split(':').map(Number); return (safeNum(parts[0])) + (safeNum(parts[1]))/60; }
         function hoursToTimeStr(hours) { if (!hours && hours !== 0) return "00:00"; const h = Math.floor(hours); const m = Math.round((hours - h) * 60); return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`; }
         function formatInputTime(val) {
             if(!val) return "00:00"; val = String(val).trim();
@@ -217,14 +213,33 @@
             if (!val.includes(':')) { if (val.length <= 2) return `${val.padStart(2,'0')}:00`; if (val.length === 3) return `0${val[0]}:${val.substring(1)}`; if (val.length === 4) return `${val.substring(0,2)}:${val.substring(2)}`; }
             const parts = val.split(':'); return `${String(parseInt(parts[0])||0).padStart(2,'0')}:${String(parseInt(parts[1])||0).padStart(2,'0')}`;
         }
-        function excelTimeToString(val) { if (typeof val === 'number') { const t = val * 24; const h = Math.floor(t); const m = Math.round((t - h) * 60); return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`; } return formatInputTime(val); }
         
-        // V36.3: 假別自動判讀 (從備註欄位提取)
+        // V37.5 FIX: 修正 Excel 數字時間/小時值的轉換邏輯
+        function excelTimeToString(val) { 
+            const n = safeNum(val);
+
+            // 1. 處理 Excel 內建的時間小數 (例如 0.3333333333333333 -> 8 hours)
+            if (typeof val === 'number' && val > 0 && val < 1) { 
+                const t = val * 24; 
+                const h = Math.floor(t); 
+                const m = Math.round((t - h) * 60); 
+                return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`; 
+            } 
+            // 2. 處理以小時為單位的大數字 (例如 160 小時)
+            if (typeof val === 'number' && val >= 1) {
+                // 假設數字代表總小時數，直接轉換為 HH:MM 格式
+                return hoursToTimeStr(val);
+            }
+
+            // 3. 處理字串格式 (HH:MM 或 HH.MM)
+            return formatInputTime(val); 
+        }
+        
+        // 從備註欄位提取假別時數 (作為後備邏輯)
         function parseLeave(note) {
             let sickHours=0, personalHours=0, annualHours=0, bereavementHours=0;
             if (!note) return { sickLeave: "00:00", personalLeave: "00:00", annualLeave: "00:00", bereavementLeave: "00:00" };
             const str = note.toString();
-            // 匹配格式: (假別) (時數):(分鐘) 或 (假別) (時數).(小數)
             const regex = /(病假|事假|曠職|扣薪|特休|年假|喪假)\s*(\d+)([:\.](\d+))?/gi;
             let match;
             while ((match = regex.exec(str)) !== null) {
@@ -232,10 +247,10 @@
                 const hours = parseInt(match[2]) || 0;
                 const minutes = parseInt(match[4]) || 0;
                 let totalHours = hours;
-                if (match[3] && match[3].includes(':')) { // Time format HH:MM
+                if (match[3] && match[3].includes(':')) { 
                     totalHours = hours + minutes / 60;
-                } else if (match[3] && match[3].includes('.')) { // Decimal format H.XX (e.g. 8.5 hours)
-                    totalHours = hours + minutes / 100; // Assuming .XX is decimal hours, not minutes.
+                } else if (match[3] && match[3].includes('.')) { 
+                    totalHours = hours + minutes / 100;
                 }
 
                 if (type.includes("特休") || type.includes("年假")) annualHours += totalHours;
@@ -252,13 +267,15 @@
             return chunked;
         }
 
-        // 3. Salary Calculation (V37.2: Logic confirmed for dedLate to avoid double counting)
+        // 3. Salary Calculation (V37.7: 核心邏輯 - 穩定計算)
         function calculateSalary(emp, data) {
             if (!emp) return null;
             const d = data || {};
+            
+            // 1. 時薪計算
             const hourlyRate = Math.round(safeNum(emp.baseSalary) / 240);
             
-            // V37.0 Enhancement: Use monthlyExpectedDays as fallback for expectedWorkHours
+            // 2. 應出勤時數 (H)
             const defaultExpectedHours = safeNum(emp.monthlyExpectedDays || 0) * 8; 
             const expectedHoursVal = timeStrToHours(d.expectedWorkHours) > 0 
                 ? timeStrToHours(d.expectedWorkHours) 
@@ -266,6 +283,7 @@
 
             const actualHoursVal = timeStrToHours(d.actualWorkHours);
             
+            // 3. 各類加項/津貼
             const payWt034 = Math.round(timeStrToHours(d.wt034) * 1.34 * hourlyRate);
             const payWt067 = Math.round(timeStrToHours(d.wt067) * 1.67 * hourlyRate);
             const payHd134 = Math.round(timeStrToHours(d.hd134) * 1.34 * hourlyRate);
@@ -277,29 +295,32 @@
             const totalAdditions = payWt034 + payWt067 + payHd134 + payHd167 + payEarly + payNoLunch + payHolidayOT + allowances;
             const grossPay = safeNum(emp.baseSalary) + totalAdditions;
 
+            // 4. 請假扣款
             const dedSick = Math.round(timeStrToHours(d.sickLeave) * 0.5 * hourlyRate);
             const dedPersonal = Math.round(timeStrToHours(d.personalLeave) * 1.0 * hourlyRate);
             
-            // V37.1 FIX: Prevent double-counting of leave hours when calculating unaccounted missing time.
-            // Add back all paid/deducted leave hours to the actual working hours to see if the EXPECTED hours are met.
+            // 5. 遲到/短缺扣款 (原未說明缺勤扣款)
             const totalLeaveHours = timeStrToHours(d.sickLeave) + timeStrToHours(d.personalLeave) + timeStrToHours(d.annualLeave) + timeStrToHours(d.bereavementLeave);
             const effectiveActualHours = actualHoursVal + totalLeaveHours; 
 
             let calcLateHoursVal = 0; 
-            // dedLate = 未被請假說明的短缺工時
             if (expectedHoursVal > 0 && effectiveActualHours < expectedHoursVal) {
+                // calcLateHoursVal 代表短缺工時 (遲到早退/未解釋缺勤)
                 calcLateHoursVal = expectedHoursVal - effectiveActualHours;
             }
             
-            const dedLate = Math.round(calcLateHoursVal * 1.0 * hourlyRate); // Deduction for unaccounted missing time
-            const dedAbsent = Math.round(timeStrToHours(d.absentTime) * 1.0 * hourlyRate); // 曠職扣款 (手動輸入，獨立於 dedLate)
-
-            let insuranceFee = d.hasImportedInsurance ? safeNum(d.deduction) : (safeNum(emp.laborFee) + safeNum(emp.healthFee));
-            let finalDeduction = dedSick + dedPersonal + dedLate + dedAbsent + insuranceFee + (d.hasImportedInsurance ? 0 : safeNum(d.deduction));
+            const dedLate = Math.round(calcLateHoursVal * 1.0 * hourlyRate); // 遲到/短缺扣款
             
-            // V37.0 NEW: Employer Pension Contribution (公司勞退提撥)
+            // 6. 手動曠職扣款 (獨立處理)
+            const dedAbsent = Math.round(timeStrToHours(d.absentTime) * 1.0 * hourlyRate); 
+
+            // 7. 公司勞退提撥 (公司成本)
             const pensionRate = safeNum(emp.pensionRate) > 0 ? safeNum(emp.pensionRate) : 0.06;
             const employerPensionContribution = Math.round(safeNum(emp.baseSalary) * pensionRate);
+            
+            // 最終扣項
+            let insuranceFee = d.hasImportedInsurance ? safeNum(d.deduction) : (safeNum(emp.laborFee) + safeNum(emp.healthFee));
+            let finalDeduction = dedSick + dedPersonal + dedLate + dedAbsent + insuranceFee + (d.hasImportedInsurance ? 0 : safeNum(d.deduction));
             
             return { 
                 hourlyRate, payWt034, payWt067, payHd134, payHd167, payEarly, payNoLunch, payHolidayOT, 
@@ -352,14 +373,15 @@
             X: (p)=><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         };
 
-        // V37.0: Add monthlyExpectedDays (e.g. 20 days) and pensionRate (e.g. 0.06 for 6%)
+        // 預設員工資料
         const INITIAL_EMPLOYEES = [{ 
             id: 1, name: '範例-張耀升', empId: 'W0001', baseSalary: 28590, laborFee: 1100, healthFee: 750, 
             title: '作業員', department: '生產部', lastRaiseDate: '2024-01-01',
-            monthlyExpectedDays: 20, // V37.0 新增: 每月應出勤天數
-            pensionRate: 0.06 // V37.0 新增: 公司提撥率
+            monthlyExpectedDays: 20, 
+            pensionRate: 0.06 
         }];
-        const INITIAL_PAYROLL_DATA = [{ empId: 1, period: '2025-11', wt034:"00:00", wt067:"00:00", hd134:"00:00", hd167:"00:00", earlyShift:"00:00", noLunch:"00:00", holidayOT:"00:00", sickLeave:"00:00", personalLeave:"00:00", annualLeave:"00:00", bereavementLeave:"00:00", lunchAllowance:0, businessBonus:0, otherBonus:0, deduction:0, expectedWorkHours:"00:00", actualWorkHours:"160:00", note:'' }];
+        const INITIAL_PAYROLL_DATA = [{ empId: 1, period: '2025-11', wt034:"00:00", wt067:"00:00", hd134:"00:00", hd167:"00:00", earlyShift:"00:00", noLunch:"00:00", holidayOT:"00:00", sickLeave:"00:00", personalLeave:"00:00", annualLeave:"00:00", bereavementLeave:"00:00", lunchAllowance:0, businessBonus:0, otherBonus:0, deduction:0, expectedWorkHours:"00:00", actualWorkHours:"160:00", absentTime:"00:00", note:'' }];
+
 
         const PayrollApp = () => {
             const [db, setDb] = useState(null);
@@ -386,7 +408,6 @@
             const [bulkFilterValue, setBulkFilterValue] = useState(28590);
             const fileInputRef = useRef(null);
             
-            // 新增：勾選狀態
             const [selectedEmpIds, setSelectedEmpIds] = useState(new Set());
 
             // Firebase Init
@@ -432,7 +453,6 @@
 
                     const empUnsub = onSnapshot(collection(db, 'payroll_system', user.uid, 'employees'), (snap) => { 
                         const list = snap.docs.map(d => {
-                            // V37.0: Ensure new fields have defaults
                             const data = d.data();
                             return { 
                                 ...data, 
@@ -464,24 +484,7 @@
                 });
             }, [employees]);
 
-            // Chunk array helper for pagination
-            const chunkedPayrollList = useMemo(() => {
-                const fullList = sortedEmployees.map(emp => {
-                    let data = payrollData.find(d => d.empId === emp.empId && d.period === currentPeriod) || { empId: emp.empId, period: currentPeriod };
-                    const safeData = {
-                        wt034: data.wt034||"00:00", wt067: data.wt067||"00:00", hd134: data.hd134||"00:00", hd167: data.hd167||"00:00",
-                        earlyShift: data.earlyShift||"00:00", noLunch: data.noLunch||"00:00", holidayOT: data.holidayOT||"00:00",
-                        sickLeave: data.sickLeave||"00:00", personalLeave: data.personalLeave||"00:00", annualLeave: data.annualLeave||"00:00", bereavementLeave: data.bereavementLeave||"00:00",
-                        lateTime: data.lateTime||"00:00", absentTime: data.absentTime||"00:00", 
-                        lunchAllowance: data.lunchAllowance||0, businessBonus: data.businessBonus||0, otherBonus: data.otherBonus||0,
-                        deduction: data.deduction||0, note: data.note||'', hasImportedInsurance: data.hasImportedInsurance,
-                        expectedWorkHours: data.expectedWorkHours||"00:00", actualWorkHours: data.actualWorkHours||"00:00"
-                    };
-                    return { ...emp, ...safeData, ...calculateSalary(emp, safeData) };
-                });
-                return chunkArray(fullList, 4); 
-            }, [sortedEmployees, payrollData, currentPeriod]);
-
+            // 扁平化並計算完整薪資清單
             const fullPayrollListFlat = useMemo(() => sortedEmployees.map(emp => {
                  let data = payrollData.find(d => d.empId === emp.empId && d.period === currentPeriod) || { empId: emp.empId, period: currentPeriod };
                 const safeData = {
@@ -495,6 +498,10 @@
                 };
                 return { ...emp, ...safeData, ...calculateSalary(emp, safeData) };
             }), [sortedEmployees, payrollData, currentPeriod]);
+
+            // Chunk array helper for pagination (用於列印)
+            const chunkedPayrollList = useMemo(() => chunkArray(fullPayrollListFlat, 4), [fullPayrollListFlat]);
+
 
             // CRUD
             const saveEmp = async (emp) => { 
@@ -556,7 +563,7 @@
             const toggleSelectAll = () => { if (selectedEmpIds.size === sortedEmployees.length) setSelectedEmpIds(new Set()); else setSelectedEmpIds(new Set(sortedEmployees.map(e => e.id))); };
             const toggleSelect = (id) => { const newSet = new Set(selectedEmpIds); if (newSet.has(id)) newSet.delete(id); else newSet.add(id); setSelectedEmpIds(newSet); };
 
-            // Excel Import (V37.3: Added mapping for Absent Time)
+            // Excel Import (V37.7: 核心邏輯)
             const handleExcel = (e) => {
                 if (isLocked) { alert("本月已結案"); return; }
                 const file = e.target.files[0]; if (!file) return;
@@ -564,44 +571,41 @@
                 reader.onload = (evt) => {
                     try {
                         const wb = XLSX.read(evt.target.result, { type: 'binary' });
-                        const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: "" });
+                        // 確保將數字視為原始數字，而不是強制轉為字串
+                        const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: "", raw: false }); 
                         let hRow = -1; for(let i=0; i<Math.min(data.length, 20); i++) { if(JSON.stringify(data[i]).includes("員工編號")) { hRow = i; break; } }
-                        if(hRow === -1) throw new Error("找不到標題列");
+                        if(hRow === -1) throw new Error("找不到標題列 (需包含'員工編號')");
                         const rows = data.slice(hRow+1);
                         
                         const headers = data[hRow];
                         
-                        // V37.3: Added explicit index for absent hours (absentH)
-                        const idx = { id:-1, name:-1, wt034:-1, wt067:-1, hd134:-1, hd167:-1, early:-1, noLunch:-1, holidayOT:-1, lunch:-1, businessBonus:-1, otherBonus:-1, ins:-1, note:-1, expHours:-1, actHours:-1, annual:-1, dept:-1, base:-1, expDays:-1, sickH:-1, personalH:-1, annualH:-1, bereavementH:-1, absentH:-1 }; // V37.3 ADD absentH
+                        const idx = { id:-1, name:-1, wt034:-1, wt067:-1, hd134:-1, hd167:-1, early:-1, noLunch:-1, holidayOT:-1, lunch:-1, businessBonus:-1, otherBonus:-1, ins:-1, note:-1, expHours:-1, actHours:-1, dept:-1, base:-1, expDays:-1, sickH:-1, personalH:-1, annualH:-1, bereavementH:-1, absentH:-1 };
 
                         headers.forEach((h, i) => {
                             const t = String(h).trim();
                             if(t.includes("員工編號")) idx.id = i; 
                             else if(t.includes("員工姓名")) idx.name = i; 
                             else if(t.includes("部門")) idx.dept = i; 
-                            else if(t.includes("基本底薪")||(t.includes("底薪")&&!t.includes("實發"))) idx.base = i;
-                            // 加班時數
+                            else if(t.includes("底薪")&&!t.includes("實發")) idx.base = i;
+                            // 加班/津貼時數
                             else if(t.includes("提前")) idx.early = i; 
                             else if(t.includes("中午")) idx.noLunch = i; 
                             else if(t.includes("星期日")) idx.holidayOT = i;
-                            // 津貼
+                            // 金額
                             else if(t.includes("午餐")||t.includes("津貼")) idx.lunch = i; 
                             else if(t.includes("業務")||t.includes("職務")) idx.businessBonus = i; 
                             else if(t.includes("其它加項")||t.includes("其他加項")||t.includes("其他津貼")) idx.otherBonus = i; 
-                            // 扣款
                             else if(t.includes("勞健保")) idx.ins = i; 
-                            // 時數
+                            // 考勤時數
                             else if(t.includes("應上班")&&t.includes("天數")) idx.expDays = i; 
                             else if(t.includes("應上班")) idx.expHours = i;
                             else if(t.includes("實上班")||t.includes("實際出勤")) { if(t.includes("時數")) idx.actHours = i; }
-                            
-                            // V37.2: 假別時數 - 優先匹配獨立欄位
+                            // 假別時數 (獨立欄位優先)
                             else if(t.includes("病假")&&(t.includes("時數")||t.includes("小時"))) idx.sickH = i;
                             else if(t.includes("事假")&&(t.includes("時數")||t.includes("小時"))) idx.personalH = i;
                             else if((t.includes("特休")||t.includes("年假"))&&(t.includes("時數")||t.includes("小時"))) idx.annualH = i;
                             else if(t.includes("喪假")&&(t.includes("時數")||t.includes("小時"))) idx.bereavementH = i;
-                            
-                            // V37.3: 曠職時數 - 獨立匹配
+                            // 曠職時數
                             else if(t.includes("曠職")&&(t.includes("時數")||t.includes("小時"))) idx.absentH = i;
 
                             if(t.includes("平日")&&(t.includes("0.34")||t.includes("0.33"))&&idx.wt034===-1) idx.wt034=i;
@@ -617,6 +621,7 @@
                             let newExpDays = idx.expDays!==-1 ? (parseInt(row[idx.expDays])||20) : 20;
 
                             if(!emp) { 
+                                // 新增員工
                                 emp = { 
                                     id: Date.now()+Math.random(), empId: eid, name: String(row[idx.name]||""), 
                                     baseSalary: baseSalary, laborFee:0, healthFee:0, title:"員工", 
@@ -626,6 +631,7 @@
                                 }; 
                                 await saveEmp(emp);
                             } else {
+                                // 更新員工基本資料
                                 let updated = false;
                                 if(idx.dept!==-1 && row[idx.dept] && emp.department!==String(row[idx.dept])) { emp.department = String(row[idx.dept]); updated = true; }
                                 if(idx.base!==-1 && row[idx.base] && emp.baseSalary!==baseSalary) { emp.baseSalary = baseSalary; updated = true; }
@@ -634,22 +640,30 @@
                             }
                             if(emp) {
                                 const noteText = String(row[idx.note]||"");
-                                // 提取備註欄位的假別作為後備
                                 const parsedLeaves = parseLeave(noteText); 
                                 
-                                // V37.2: 決定最終假別時數 (優先使用獨立欄位，否則使用備註解析結果)
-                                const sickLeaveTime = idx.sickH !== -1 && row[idx.sickH] ? excelTimeToString(row[idx.sickH]) : parsedLeaves.sickLeave;
-                                const personalLeaveTime = idx.personalH !== -1 && row[idx.personalH] ? excelTimeToString(row[idx.personalH]) : parsedLeaves.personalLeave;
-                                const annualLeaveTime = idx.annualH !== -1 && row[idx.annualH] ? excelTimeToString(row[idx.annualH]) : parsedLeaves.annualLeave;
-                                const bereavementLeaveTime = idx.bereavementH !== -1 && row[idx.bereavementH] ? excelTimeToString(row[idx.bereavementH]) : parsedLeaves.bereavementLeave;
+                                // 假別時數: 優先使用獨立欄位時數，否則使用備註解析結果
+                                const getLeaveTime = (key, fallback) => {
+                                    const val = row[idx[key]];
+                                    return (idx[key] !== -1 && (typeof val === 'number' || String(val).trim() !== '')) 
+                                        ? excelTimeToString(val) 
+                                        : fallback;
+                                };
+
+                                const sickLeaveTime = getLeaveTime('sickH', parsedLeaves.sickLeave);
+                                const personalLeaveTime = getLeaveTime('personalH', parsedLeaves.personalLeave);
+                                const annualLeaveTime = getLeaveTime('annualH', parsedLeaves.annualLeave);
+                                const bereavementLeaveTime = getLeaveTime('bereavementH', parsedLeaves.bereavementLeave);
                                 
-                                // V37.3: 曠職時數 (優先使用獨立欄位)
-                                const absentTimeManual = idx.absentH !== -1 && row[idx.absentH] ? excelTimeToString(row[idx.absentH]) : "00:00";
+                                // 曠職時數: 優先使用獨立欄位時數
+                                const absentTimeManual = (idx.absentH !== -1 && (typeof row[idx.absentH] === 'number' || String(row[idx.absentH]).trim() !== '')) 
+                                    ? excelTimeToString(row[idx.absentH]) 
+                                    : "00:00";
 
 
                                 const entry = { 
                                     empId: emp.empId, period: currentPeriod, 
-                                    // 加班/未休時數
+                                    // 時數
                                     wt034: idx.wt034!==-1?excelTimeToString(row[idx.wt034]):"00:00", 
                                     wt067: idx.wt067!==-1?excelTimeToString(row[idx.wt067]):"00:00", 
                                     hd134: idx.hd134!==-1?excelTimeToString(row[idx.hd134]):"00:00", 
@@ -658,13 +672,13 @@
                                     noLunch: idx.noLunch!==-1?excelTimeToString(row[idx.noLunch]):"00:00", 
                                     holidayOT: idx.holidayOT!==-1?excelTimeToString(row[idx.holidayOT]):"00:00", 
                                     
-                                    // 假別時數 (已優先處理)
+                                    // 假別時數
                                     sickLeave: sickLeaveTime, 
                                     personalLeave: personalLeaveTime, 
                                     annualLeave: annualLeaveTime, 
                                     bereavementLeave: bereavementLeaveTime, 
 
-                                    // 津貼
+                                    // 金額
                                     lunchAllowance: idx.lunch!==-1 ? parseInt(row[idx.lunch])||0 : 0, 
                                     businessBonus: idx.businessBonus!==-1 ? parseInt(row[idx.businessBonus])||0 : 0, 
                                     otherBonus: idx.otherBonus!==-1 ? parseInt(row[idx.otherBonus])||0 : 0, 
@@ -675,14 +689,14 @@
                                     expectedWorkHours: idx.expHours !== -1 ? excelTimeToString(row[idx.expHours]) : "00:00",
                                     actualWorkHours: idx.actHours !== -1 ? excelTimeToString(row[idx.actHours]) : "00:00", 
                                     lateTime: "00:00", 
-                                    absentTime: absentTimeManual, // V37.3 導入曠職時數
+                                    absentTime: absentTimeManual, 
                                     note: noteText 
                                 };
                                 await savePay(entry); count++;
                             }
                         });
                         Promise.all(promises).then(() => { setIsImportModalOpen(false); alert(`成功匯入 ${count} 筆資料！`); });
-                    } catch(err) { console.error(err); alert("匯入失敗"); }
+                    } catch(err) { console.error(err); alert(`匯入失敗，請檢查 Excel 檔案格式。錯誤詳情：${err.message}`); }
                     if(fileInputRef.current) fileInputRef.current.value = '';
                 };
                 reader.readAsBinaryString(file);
@@ -708,13 +722,13 @@
                 await saveEmp(newEmp); 
                 setIsEmpModalOpen(false); 
             };
-            const deleteEmployee = (id) => { if(confirm('刪除?')) delEmp(id); };
+            const deleteEmployee = (id) => { if(confirm('確定刪除此員工資料？')) delEmp(id); };
             const handleBulkSubmit = async (e) => { 
                 e.preventDefault(); const target = Number(bulkTargetSalary); if(!target) return; 
                 const today = new Date().toISOString().split('T')[0]; let c=0; 
                 const targets = selectedEmpIds.size > 0 ? employees.filter(e => selectedEmpIds.has(e.id)) : employees.filter(e => { if(bulkFilterType==='all') return true; if(bulkFilterType==='title' && e.title.includes(String(bulkFilterValue))) return true; if(bulkFilterType==='salary' && e.baseSalary===Number(bulkFilterValue)) return true; return false; });
                 for(let emp of targets) { if (emp.baseSalary !== target) { c++; await saveEmp({...emp, baseSalary: target, lastRaiseDate: today}); } } 
-                setIsBulkModalOpen(false); setSelectedEmpIds(new Set()); alert(`更新 ${c} 人`); 
+                setIsBulkModalOpen(false); setSelectedEmpIds(new Set()); alert(`成功更新 ${c} 位員工底薪。`); 
             };
             
             // V37.0: Add Employer Pension Contribution to export
@@ -739,7 +753,7 @@
                 <div className="min-h-screen pb-24 md:pb-10 bg-gray-50">
                     <nav className="bg-slate-800 text-white shadow-lg print-hidden sticky top-0 z-40 hidden md:block">
                         <div className="max-w-7xl mx-auto px-4 flex justify-between h-16 items-center">
-                            <div className="flex items-center space-x-2"><Icons.Calculator className="w-6 h-6 text-yellow-400"/><span className="font-bold text-xl">薪資管理系統 V37.3</span></div>
+                            <div className="flex items-center space-x-2"><Icons.Calculator className="w-6 h-6 text-yellow-400"/><span className="font-bold text-xl">薪資管理系統 V37.7 (最終穩定版)</span></div>
                             <div className="flex space-x-2">
                                 {isOffline && <span className="offline-badge mr-2 animate-pulse">⚠️ 離線模式 (配額額滿)</span>}
                                 {user && !isOffline && <span className="flex items-center text-xs text-green-400 mr-4"><Icons.Cloud className="w-3 h-3 mr-1"/> 雲端同步</span>}
@@ -761,22 +775,16 @@
                         {activeTab === 'input' && (
                             <div className="space-y-4 animate-fade-in print-hidden">
                                 <div className="bg-white p-4 rounded-lg shadow text-xs mb-4">
-                                    <h3 className="font-bold text-lg text-gray-700 border-b pb-1 mb-2">💰 結算公式說明 (V37.3)</h3>
+                                    <h3 className="font-bold text-lg text-gray-700 border-b pb-1 mb-2">💰 結算公式說明 (V37.7)</h3>
                                     <ul className="list-disc list-inside space-y-1 text-gray-600">
                                         <li>**時薪計算**：`時薪 = 底薪 / 240` (四捨五入)。</li>
-                                        <li>**Excel 導入**：支援獨立欄位導入**所有**時數項目，無需手動調整。</li>
+                                        <li>**Excel 時數導入已強化**：現在能更穩定地解析 Excel 中的小時大數 (如 160) 和時間小數 (如 0.333) 為正確的 HH:MM 格式。</li>
                                         <li>**應出勤時數**：優先使用本月輸入的時數；若為空，則使用員工設定中的 **`應出勤天數` $\times 8$ 小時** 作為基準。</li>
-                                        <li>**未說明缺勤扣款 (自動)**：
+                                        <li>**遲到/短缺扣款 (自動)**：
                                             <ul className="list-circle list-inside ml-4">
-                                                <li>`未說明缺勤時數 = Max(0, (應出勤時數 - 實際工時 - 所有請假時數))`</li>
-                                                <li>此項用於計算**未被請假/特休等說明的短缺工時**，避免與其他假別扣款重複。</li>
-                                                <li>`缺勤扣款 = 缺勤時數 × 時薪 × 1.0` (全額扣薪)。</li>
-                                            </ul>
-                                        </li>
-                                        <li>**請假扣款**：
-                                            <ul className="list-circle list-inside ml-4">
-                                                <li>`病假扣款 = 病假時數 (獨立欄位或備註自動提取) × 時薪 × 0.5`</li>
-                                                <li>`事假扣款 = 事假時數 (獨立欄位或備註自動提取) × 時薪 × 1.0`</li>
+                                                <li>`短缺時數 = Max(0, (應出勤時數 - 實際工時 - 所有請假時數))`</li>
+                                                <li>此項用於計算**應出勤但未被說明原因的短缺工時**。</li>
+                                                <li>`扣款 = 短缺時數 × 時薪 × 1.0` (全額扣薪)。</li>
                                             </ul>
                                         </li>
                                     </ul>
@@ -791,7 +799,6 @@
                                             <tr>
                                                 <th className="p-2 sticky left-0 bg-slate-100 z-10">員工</th>
                                                 <th className="p-2">本薪</th>
-                                                <th className="p-2 text-red-800 bg-red-50">公司勞退</th> 
                                                 <th className="p-2 text-blue-800 bg-blue-50">應上班 (H)</th> 
                                                 <th className="p-2">實工 (H)</th>
                                                 <th className="p-2 bg-blue-50">平加(1.34)</th>
@@ -817,7 +824,6 @@
                                                 <tr key={item.id} className="border-b hover:bg-gray-50">
                                                     <td className="p-2 sticky left-0 bg-white font-bold z-10">{item.name}</td>
                                                     <td className="p-1 font-mono">${formatNumber(item.baseSalary)}</td> 
-                                                    <td className="p-1 bg-red-50 font-mono text-red-800">${formatNumber(item.employerPensionContribution)}</td> 
                                                     <td className="p-1 bg-blue-50"><input disabled={isLocked} className="w-14 border text-blue-800 font-bold" value={item.expectedHoursStr} onChange={e=>updateVal(item.empId,'expectedWorkHours',e.target.value)} onBlur={e=>handleTimeBlur(item.empId,'expectedWorkHours',e.target.value)}/></td> 
                                                     <td className="p-1"><input disabled={isLocked} className="w-14 border" value={item.actualWorkHours} onChange={e=>updateVal(item.empId,'actualWorkHours',e.target.value)} onBlur={e=>handleTimeBlur(item.empId,'actualWorkHours',e.target.value)}/></td>
                                                     <td className="p-1 bg-blue-50"><input disabled={isLocked} className="w-12 border" value={item.wt034} onChange={e=>updateVal(item.empId,'wt034',e.target.value)} onBlur={e=>handleTimeBlur(item.empId,'wt034',e.target.value)}/></td>
@@ -884,24 +890,23 @@
                                                             <div className="section-title">應扣項目 (-)</div>
                                                             {(safeNum(item.insuranceFee) > 0) && <div className="item-row"><span className="item-label">勞健保費</span><span className="item-value text-red-700">${formatNumber(item.insuranceFee)}</span></div>}
                                                             
-                                                            {/* V37.1 修正：假別扣款顯示時數，避免與自動扣款混淆 */}
+                                                            {/* 假別扣款 */}
                                                             {item.dedSick > 0 && <div className="item-row"><span className="item-label">病假扣款 (${item.sickLeave})</span><span className="item-value text-red-700">${formatNumber(item.dedSick)}</span></div>}
                                                             {item.dedPersonal > 0 && <div className="item-row"><span className="item-label">事假扣款 (${item.personalLeave})</span><span className="item-value text-red-700">${formatNumber(item.dedPersonal)}</span></div>}
                                                             
-                                                            {/* V37.1 修正：遲到 (改名為未說明缺勤扣款)，防止與假別扣款重複計算 */}
-                                                            {item.dedLate > 0 && <div className="item-row"><span className="item-label">未說明缺勤扣款 (${item.calcLateHoursStr})</span><span className="item-value text-red-700">${formatNumber(item.dedLate)}</span></div>}
+                                                            {/* V37.7 修正：更名為「遲到/短缺扣款」 */}
+                                                            {item.dedLate > 0 && <div className="item-row"><span className="item-label">遲到/短缺扣款 (${item.calcLateHoursStr})</span><span className="item-value text-red-700">${formatNumber(item.dedLate)}</span></div>}
                                                             
-                                                            {/* 手動曠職扣款 (若金額不為零，且未被 dedLate 覆蓋的獨立手動扣款) */}
+                                                            {/* 手動曠職扣款 (獨立輸入的曠職時數) */}
                                                             {item.dedAbsent > 0 && <div className="item-row"><span className="item-label">手動曠職扣款 (${item.absentTime})</span><span className="item-value text-red-700">${formatNumber(item.dedAbsent)}</span></div>}
                                                             
-                                                            {/* V37.0: 顯示公司勞退提撥 (公司成本，非員工扣款) */}
-                                                            {item.employerPensionContribution > 0 && <div className="item-row" style={{borderTop:'1px solid #ddd', marginTop:'4px'}}><span className="item-label text-red-800">公司勞退提撥 (${item.pensionRate*100}%)</span><span className="item-value text-red-800">${formatNumber(item.employerPensionContribution)}</span></div>}
+                                                            {/* V37.6 REMOVED: 取消顯示公司勞退提撥 */}
 
                                                             <div className="subtotal-row" style={{color:'#dc2626'}}><span>應扣合計</span><span>${formatNumber(item.finalDeduction)}</span></div>
                                                         </div>
                                                     </div>
                                                     
-                                                    {/* 修正：Footer 佈局 */}
+                                                    {/* Footer 佈局 */}
                                                     <div className="footer">
                                                         <div className="footer-main">
                                                             <div className="footer-left">
@@ -915,7 +920,7 @@
                                                             </div>
                                                         </div>
                                                         
-                                                        {/* 修正：假別顯示在最底部 */}
+                                                        {/* 假別顯示在最底部 */}
                                                         <div className="footer-leaves">
                                                             {(timeStrToHours(item.annualLeave) > 0) && <span style={{marginRight:'8px'}}>特休:{item.annualLeave}</span>}
                                                             {(timeStrToHours(item.bereavementLeave) > 0) && <span style={{marginRight:'8px'}}>喪假:{item.bereavementLeave}</span>}
@@ -931,6 +936,7 @@
                             </div>
                         )}
                         
+                        {/* Mobile Edit Modal */}
                         {mobileEditItem && <div className="fixed inset-0 bg-white z-50 overflow-y-auto pb-safe print-hidden"><div className="sticky top-0 bg-slate-800 text-white p-4 flex justify-between items-center shadow"><div><div className="font-bold text-lg">{mobileEditItem.name}</div><div className="text-xs opacity-75">{currentPeriod} 編輯</div></div><button onClick={() => setMobileEditItem(null)} className="px-4 py-1 bg-slate-600 rounded">完成</button></div><div className="p-4 space-y-6"><div className="space-y-3"><h3 className="font-bold text-gray-500 border-b pb-1">工時紀錄</h3><div className="grid grid-cols-2 gap-4"><label className="block text-sm">應上班天數 <input type="number" className="w-full border rounded p-2 mt-1 bg-gray-50" value={mobileEditItem.monthlyExpectedDays} onChange={e=>saveEmp({...mobileEditItem, monthlyExpectedDays: Number(e.target.value)})}/></label><label className="block text-sm">應上班時數 (手動) <input type="text" className="w-full border rounded p-2 mt-1" value={mobileEditItem.expectedWorkHours} onChange={e=>updateVal(mobileEditItem.empId, 'expectedWorkHours', e.target.value)} onBlur={e=>handleTimeBlur(mobileEditItem.empId, 'expectedWorkHours', e.target.value)}/></label><label className="block text-sm">實際時數 <input type="text" className="w-full border rounded p-2 mt-1 bg-gray-50" value={mobileEditItem.actualWorkHours} onChange={e=>updateVal(mobileEditItem.empId, 'actualWorkHours', e.target.value)} onBlur={e=>handleTimeBlur(mobileEditItem.empId, 'actualWorkHours', e.target.value)}/></label><label className="block text-sm">曠職時數 <input type="text" className="w-full border rounded p-2 mt-1" value={mobileEditItem.absentTime} onChange={e=>updateVal(mobileEditItem.empId, 'absentTime', e.target.value)} onBlur={e=>handleTimeBlur(mobileEditItem.empId, 'absentTime', e.target.value)}/></label></div></div><div className="space-y-3"><h3 className="font-bold text-blue-600 border-b pb-1">加班時數</h3><div className="grid grid-cols-2 gap-4"><label className="block text-sm">平加 1.34 <input type="text" className="w-full border rounded p-2 mt-1" value={mobileEditItem.wt034} onChange={e=>updateVal(mobileEditItem.empId, 'wt034', e.target.value)} onBlur={e=>handleTimeBlur(mobileEditItem.empId, 'wt034', e.target.value)}/></label><label className="block text-sm">平加 1.67 <input type="text" className="w-full border rounded p-2 mt-1" value={mobileEditItem.wt067} onChange={e=>updateVal(mobileEditItem.empId, 'wt067', e.target.value)} onBlur={e=>handleTimeBlur(mobileEditItem.empId, 'wt067', e.target.value)}/></label><label className="block text-sm">例假 1.34 <input type="text" className="w-full border rounded p-2 mt-1" value={mobileEditItem.hd134} onChange={e=>updateVal(mobileEditItem.empId, 'hd134', e.target.value)} onBlur={e=>handleTimeBlur(mobileEditItem.empId, 'hd134', e.target.value)}/></label><label className="block text-sm">例假 1.67 <input type="text" className="w-full border rounded p-2 mt-1" value={mobileEditItem.hd167} onChange={e=>updateVal(mobileEditItem.empId, 'hd167', e.target.value)} onBlur={e=>handleTimeBlur(mobileEditItem.empId, 'hd167', e.target.value)}/></label></div></div><div className="h-20"></div></div></div>}
                         {/* Modals */}
                         {isImportModalOpen && <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 print-hidden"><div className="bg-white p-6 rounded shadow-xl w-full max-w-lg"><h3 className="font-bold text-lg mb-4">匯入 Excel</h3><input type="file" ref={fileInputRef} accept=".xlsx,.csv" onChange={handleExcel} className="border p-2 w-full"/><button onClick={()=>setIsImportModalOpen(false)} className="mt-4 px-4 py-2 bg-gray-200 rounded">關閉</button></div></div>}
@@ -948,11 +954,9 @@
                                         <input name="laborFee" type="number" defaultValue={editingEmp?.laborFee} placeholder="勞保自付額 (元)" className="border p-2 w-full"/>
                                         <input name="healthFee" type="number" defaultValue={editingEmp?.healthFee} placeholder="健保自付額 (元)" className="border p-2 w-full"/>
                                         
-                                        {/* V37.0 新增欄位: 應出勤天數 */}
                                         <label className="block text-sm text-gray-500 pt-2">每月應出勤天數 (用於自動計算應勤時數)</label>
                                         <input name="monthlyExpectedDays" type="number" defaultValue={editingEmp?.monthlyExpectedDays || 20} placeholder="每月應出勤天數 (例如 20)" className="border p-2 w-full"/>
 
-                                        {/* V37.0 新增欄位: 勞退提撥率 */}
                                         <label className="block text-sm text-gray-500 pt-2">公司勞退提撥率 (例如 0.06)</label>
                                         <input name="pensionRate" type="number" step="0.01" defaultValue={editingEmp?.pensionRate || 0.06} placeholder="公司勞退提撥率 (例如 0.06)" className="border p-2 w-full"/>
 
