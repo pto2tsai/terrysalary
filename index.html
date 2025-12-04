@@ -305,12 +305,12 @@
         }
         function excelTimeToString(val) { if (typeof val === 'number') { const t = val * 24; const h = Math.floor(t); const m = Math.round((t - h) * 60); return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`; } return formatInputTime(val); }
         
-        // V36.2: 假別自動判讀
+        // V36.3: 假別自動判讀 (修正邏輯以提取時數)
         function parseLeave(note) {
-            let sick=0, personal=0, annual=0, bereavement=0;
+            let sickHours=0, personalHours=0, annualHours=0, bereavementHours=0;
             if (!note) return { sickLeave: "00:00", personalLeave: "00:00", annualLeave: "00:00", bereavementLeave: "00:00" };
             const str = note.toString();
-            // 匹配格式如: "事假16:00", "病假8", "特休 4.5", "喪假 16"
+            // Regex: 匹配 (假別關鍵字 + 任意空格 + 數字:數字 或 數字.數字 或 數字)
             const regex = /(病假|事假|曠職|扣薪|特休|年假|喪假)\s*(\d+)([:\.](\d+))?/gi;
             
             let match;
@@ -320,24 +320,22 @@
                 const minutes = parseInt(match[4]) || 0;
                 const totalHours = hours + minutes / 60;
                 
-                const timeStr = hoursToTimeStr(totalHours);
-                
                 if (type.includes("特休") || type.includes("年假")) {
-                    annual = timeStr;
+                    annualHours += totalHours;
                 } else if (type.includes("病假")) {
-                    sick = timeStr;
+                    sickHours += totalHours;
                 } else if (type.includes("事假") || type.includes("扣薪") || type.includes("曠職")) {
-                    personal = timeStr; // 暫時歸為事假，用於扣款計算
+                    personalHours += totalHours; 
                 } else if (type.includes("喪假")) {
-                    bereavement = timeStr;
+                    bereavementHours += totalHours;
                 }
             }
 
             return { 
-                sickLeave: sick, 
-                personalLeave: personal, 
-                annualLeave: annual, 
-                bereavementLeave: bereavement 
+                sickLeave: hoursToTimeStr(sickHours), 
+                personalLeave: hoursToTimeStr(personalHours), 
+                annualLeave: hoursToTimeStr(annualHours), 
+                bereavementLeave: hoursToTimeStr(bereavementHours) 
             };
         }
 
@@ -743,8 +741,13 @@
                                     <table className="min-w-full text-xs whitespace-nowrap">
                                         <thead className="bg-slate-100">
                                             <tr>
-                                                <th className="p-2 sticky left-0 bg-slate-100 z-10">員工</th><th className="p-2">實工</th><th className="p-2 bg-blue-50">平(1.34)</th><th className="p-2 bg-blue-50">平(1.67)</th><th className="p-2 bg-purple-50">例(1.34)</th><th className="p-2 bg-purple-50">例(1.67)</th><th className="p-2">提早</th><th className="p-2">未休</th><th className="p-2">休加</th><th className="p-2 text-green-700">午餐</th><th className="p-2 text-green-700">業務</th><th className="p-2 text-green-700">其它</th><th className="p-2 text-red-700">病0.5</th><th className="p-2 text-red-800">事1.0</th>
+                                                <th className="p-2 sticky left-0 bg-slate-100 z-10">員工</th><th className="p-2">實工</th><th className="p-2 bg-blue-50">平(1.34)</th><th className="p-2 bg-blue-50">平(1.67)</th><th className="p-2 bg-purple-50">例(1.34)</th><th className="p-2 bg-purple-50">例(1.67)</th><th className="p-2">提早</th><th className="p-2">未休</th><th className="p-2">休加</th><th className="p-2 text-green-700">午餐</th><th className="p-2 text-green-700">業務</th><th className="p-2 text-green-700">其它</th>
+                                                
+                                                {/* V36.2: 假別欄位 */}
+                                                <th className="p-2 text-red-700 bg-red-100">病假</th>
+                                                <th className="p-2 text-red-800 bg-red-100">事假</th>
                                                 <th className="p-2 text-red-900 bg-red-50">曠職</th>
+                                                
                                                 <th className="p-2 text-orange-700">勞健</th><th className="p-2 sticky right-0 bg-slate-100 z-10">實發</th>
                                             </tr>
                                         </thead>
@@ -763,11 +766,11 @@
                                                     <td className="p-1"><input type="number" disabled={isLocked} className="w-14 border" value={item.lunchAllowance} onChange={e=>updateVal(item.empId,'lunchAllowance',e.target.value)}/></td>
                                                     <td className="p-1 bg-green-50"><input type="number" disabled={isLocked} className="w-14 border font-bold text-green-700" value={item.businessBonus} onChange={e=>updateVal(item.empId,'businessBonus',e.target.value)}/></td>
                                                     <td className="p-1 bg-green-50"><input type="number" disabled={isLocked} className="w-14 border font-bold text-green-700" value={item.otherBonus} onChange={e=>updateVal(item.empId,'otherBonus',e.target.value)}/></td>
-                                                    <td className="p-1"><input disabled={isLocked} className="w-12 border" value={item.sickLeave} onChange={e=>updateVal(item.empId,'sickLeave',e.target.value)} onBlur={e=>handleTimeBlur(item.empId,'sickLeave',e.target.value)}/></td>
-                                                    <td className="p-1"><input disabled={isLocked} className="w-12 border" value={item.personalLeave} onChange={e=>updateVal(item.empId,'personalLeave',e.target.value)} onBlur={e=>handleTimeBlur(item.empId,'personalLeave',e.target.value)}/></td>
                                                     
-                                                    {/* 遲到時數 (自動計算，只讀) */}
-                                                    <td className="p-1 bg-red-50"><input disabled className="w-12 border text-red-800 font-bold input-locked" value={item.calcLateHoursStr} /></td>
+                                                    {/* 假別時數 (自動解析，但仍允許在系統中覆蓋) */}
+                                                    <td className="p-1 bg-red-100"><input disabled={isLocked} className="w-12 border" value={item.sickLeave} onChange={e=>updateVal(item.empId,'sickLeave',e.target.value)} onBlur={e=>handleTimeBlur(item.empId,'sickLeave',e.target.value)}/></td>
+                                                    <td className="p-1 bg-red-100"><input disabled={isLocked} className="w-12 border" value={item.personalLeave} onChange={e=>updateVal(item.empId,'personalLeave',e.target.value)} onBlur={e=>handleTimeBlur(item.empId,'personalLeave',e.target.value)}/></td>
+                                                    
                                                     {/* 曠職時數 (手動輸入) */}
                                                     <td className="p-1 bg-red-50"><input disabled={isLocked} className="w-12 border text-red-800 font-bold" value={item.absentTime || "00:00"} onChange={e=>updateVal(item.empId,'absentTime',e.target.value)} onBlur={e=>handleTimeBlur(item.empId,'absentTime',e.target.value)}/></td>
 
