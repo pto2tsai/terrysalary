@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>薪資管理系統 (V36.0 - 分頁完美版)</title>
+    <title>薪資管理系統 (V36.1 - 災難恢復版)</title>
     
     <!-- 1. 引入樣式與核心庫 -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -45,7 +45,7 @@
         .payroll-slip-style {
             background: white;
             border: 3px double #000; /* 專業雙線邊框 */
-            padding: 12px;
+            padding: 10px 15px; /* 上下內距縮小，爭取空間 */
             box-sizing: border-box;
             display: flex;
             flex-direction: column;
@@ -53,10 +53,12 @@
             color: #000;
             position: relative;
             width: 100%;
-            overflow: hidden;
+            overflow: hidden; /* 關鍵：防止內容溢出破壞版面 */
         }
 
-        /* 字體與排版設定 (V36.0 修正版) */
+        /* --- 字體與排版設定 (V36.0 修正版) --- */
+        
+        /* 1. 標題：30px (極大) */
         .slip-title { 
             font-size: 30px !important; 
             font-weight: 900 !important; 
@@ -74,16 +76,16 @@
             align-items: baseline; 
             border-bottom: 1px dashed #000; 
             padding-bottom: 4px; 
-            margin-bottom: 6px;
+            margin-bottom: 4px;
         }
-        .emp-name { font-size: 22px !important; font-weight: 900 !important; } /* 稍微調整以配合整體比例 */
+        .emp-name { font-size: 24px !important; font-weight: 900 !important; }
         .emp-id { font-size: 14px !important; font-weight: 600; margin-left: 6px; }
         .emp-dept { font-size: 16px !important; font-weight: 800; }
 
         /* 核心二欄式佈局 */
         .body-grid { 
             display: grid; 
-            grid-template-columns: 1fr 1px 1fr; 
+            grid-template-columns: 1fr 1px 1fr; /* 左(加項) | 線 | 右(減項) */
             gap: 10px; 
             flex-grow: 1; 
             align-content: start;
@@ -94,22 +96,24 @@
             font-size: 15px !important; 
             font-weight: 900 !important; 
             text-decoration: underline; 
-            margin-bottom: 4px; 
+            margin-bottom: 2px; 
             text-align: center;
         }
 
-        /* 項目行：14px 加粗 (靠左) */
+        /* 2. 項目名稱：14px 加粗 (靠左) */
+        .item-label { font-size: 14px !important; font-weight: 700 !important; text-align: left; }
+        
+        /* 3. 金額數字：16px 加粗 (靠右) */
+        .item-value { font-size: 16px !important; font-weight: 800 !important; font-family: Consolas, monospace; text-align: right; }
+
+        /* 項目行排版 */
         .item-row { 
             display: flex; 
             justify-content: space-between; 
             align-items: center; 
-            line-height: 1.3; 
-            margin-bottom: 1px;
+            line-height: 1.2; /* 收緊行距以容納更多項目 */
+            margin-bottom: 0px;
         }
-        .item-label { font-size: 14px !important; font-weight: 700 !important; text-align: left; }
-        
-        /* 金額數字：16px 加粗 (靠右) */
-        .item-value { font-size: 16px !important; font-weight: 800 !important; font-family: Consolas, monospace; text-align: right; }
         
         /* 合計行 */
         .subtotal-row {
@@ -123,18 +127,19 @@
         }
 
         .footer {
-            margin-top: auto;
+            margin-top: auto; /* 推到底部 */
             border-top: 3px double #000;
             padding-top: 4px;
             display: flex;
             justify-content: space-between;
             align-items: flex-end;
         }
-        .footer-left { font-size: 11px !important; font-weight: 600; line-height: 1.3; width: 60%; }
-        .footer-right { text-align: right; width: 40%; }
+        .footer-left { font-size: 11px !important; font-weight: 600; line-height: 1.2; width: 55%; }
+        .footer-right { text-align: right; width: 45%; }
         
         .net-pay-label { font-size: 18px !important; font-weight: 800; margin-right: 5px; }
-        /* 實發金額：32px (超大粗體) */
+        
+        /* 4. 實發金額：32px (超大粗體) */
         .net-pay-value { 
             font-size: 32px !important; 
             font-weight: 900; 
@@ -143,7 +148,7 @@
             line-height: 1;
         }
 
-        /* --- 螢幕預覽樣式 (以A4頁面為單位) --- */
+        /* --- 螢幕預覽專用 --- */
         @media screen {
             .print-page-wrapper {
                 display: flex;
@@ -219,7 +224,7 @@
 
             .payroll-slip-style {
                 width: 100% !important;
-                height: 100% !important; /* 填滿 grid cell */
+                height: 138mm !important; /* V36.1 修正：更保守的高度以避免重疊 (138*2 + 5 = 281mm < 297mm) */
                 box-shadow: none !important;
                 margin: 0 !important;
                 border-radius: 0 !important;
@@ -232,6 +237,7 @@
         .input-locked { background-color: #f3f4f6; color: #6b7280; cursor: not-allowed; border-color: #e5e7eb; }
         .checkbox-cell { width: 40px; text-align: center; }
         .checkbox-input { width: 18px; height: 18px; cursor: pointer; }
+        .offline-badge { background-color: #ef4444; color: white; font-size: 12px; padding: 2px 6px; border-radius: 4px; display: inline-flex; align-items: center; }
     </style>
 </head>
 <body class="pb-20 md:pb-0">
@@ -378,6 +384,7 @@
             const [user, setUser] = useState(null);
             const [appId, setAppId] = useState(null);
             const [isCloudReady, setIsCloudReady] = useState(false);
+            const [isOffline, setIsOffline] = useState(false); // V36.1: Offline mode state
 
             const safeParse = (key, defaultVal) => { try { return JSON.parse(localStorage.getItem(key)) || defaultVal; } catch(e) { return defaultVal; } };
             const [activeTab, setActiveTab] = useState('input');
@@ -397,6 +404,7 @@
             const [bulkFilterValue, setBulkFilterValue] = useState(28590);
             const fileInputRef = useRef(null);
             
+            // 新增：勾選狀態
             const [selectedEmpIds, setSelectedEmpIds] = useState(new Set());
 
             // Firebase Init
@@ -421,26 +429,38 @@
                         console.error("Firebase Init Failed", error);
                         setIsCloudReady(false); 
                         document.getElementById('loading-screen').style.display = 'none';
+                        setIsOffline(true);
                     }
                 };
                 initFirebase();
             }, []);
 
-            // Data Sync
+            // Data Sync (V36.1: Fixed loop and added Quota protection)
             useEffect(() => {
-                if (isCloudReady && db && user?.uid) {
+                if (isCloudReady && db && user?.uid && !isOffline) {
                     const { collection, onSnapshot } = window.firebaseModules;
-                    const handleError = (err) => console.error("Firestore Error:", err);
+                    
+                    const handleError = (err) => {
+                        console.error("Firestore Error:", err);
+                        if (err.code === 'resource-exhausted') {
+                            alert("⚠️ 雲端讀取額度已用盡，系統已自動切換至「離線模式」。\n您仍可繼續操作，資料將暫存於本機，待額度恢復後請重新整理頁面。");
+                            setIsOffline(true);
+                        }
+                    };
+
                     const empUnsub = onSnapshot(collection(db, 'payroll_system', user.uid, 'employees'), (snap) => { const list = snap.docs.map(d => d.data()); if(list.length > 0) setEmployees(list); }, handleError);
                     const payUnsub = onSnapshot(collection(db, 'payroll_system', user.uid, 'payroll'), (snap) => { const list = snap.docs.map(d => d.data()); if(list.length > 0) setPayrollData(list); }, handleError);
                     const statUnsub = onSnapshot(collection(db, 'payroll_system', user.uid, 'status'), (snap) => { const obj = {}; snap.docs.forEach(d => obj[d.id] = d.data().status); setMonthlyStatus(obj); }, handleError);
                     return () => { empUnsub(); payUnsub(); statUnsub(); };
-                } else {
-                    localStorage.setItem('payroll_employees', JSON.stringify(employees));
-                    localStorage.setItem('payroll_data', JSON.stringify(payrollData));
-                    localStorage.setItem('payroll_status', JSON.stringify(monthlyStatus));
-                }
-            }, [isCloudReady, db, user?.uid, employees, payrollData, monthlyStatus]);
+                } 
+            }, [isCloudReady, db, user?.uid, isOffline]);
+
+            // Local Backup (V36.1: Always backup to localStorage)
+            useEffect(() => {
+                localStorage.setItem('payroll_employees', JSON.stringify(employees));
+                localStorage.setItem('payroll_data', JSON.stringify(payrollData));
+                localStorage.setItem('payroll_status', JSON.stringify(monthlyStatus));
+            }, [employees, payrollData, monthlyStatus]);
 
             // Sorted Employees
             const sortedEmployees = useMemo(() => {
@@ -481,11 +501,49 @@
                 return { ...emp, ...safeData, ...calculateSalary(emp, safeData) };
             }), [sortedEmployees, payrollData, currentPeriod]);
 
-            // CRUD
-            const saveEmp = async (emp) => { if (db && user) { const { doc, setDoc } = window.firebaseModules; await setDoc(doc(db, 'payroll_system', user.uid, 'employees', String(emp.id)), emp); } else { const newEmps = employees.some(e=>e.id===emp.id) ? employees.map(e=>e.id===emp.id?emp:e) : [...employees, emp]; setEmployees(newEmps); } };
-            const delEmp = async (id) => { if (db && user) { const { doc, deleteDoc } = window.firebaseModules; await deleteDoc(doc(db, 'payroll_system', user.uid, 'employees', String(id))); } else { setEmployees(prev => prev.filter(e=>e.id!==id)); } };
-            const savePay = async (data) => { if (db && user) { const { doc, setDoc } = window.firebaseModules; const key = `${data.empId}_${data.period}`; await setDoc(doc(db, 'payroll_system', user.uid, 'payroll', key), data); } else { setPayrollData(prev => { const idx = prev.findIndex(p=>p.empId===data.empId && p.period===data.period); if(idx>=0) { const n=[...prev]; n[idx]=data; return n; } return [...prev, data]; }); } };
-            const saveStat = async (period, status) => { if (db && user) { const { doc, setDoc } = window.firebaseModules; await setDoc(doc(db, 'payroll_system', user.uid, 'status', period), { status }); } else { setMonthlyStatus(prev => ({...prev, [period]: status})); } };
+            // CRUD (V36.1: Handle Offline Mode)
+            const saveEmp = async (emp) => { 
+                if (db && user && !isOffline) { 
+                    try {
+                        const { doc, setDoc } = window.firebaseModules; 
+                        await setDoc(doc(db, 'payroll_system', user.uid, 'employees', String(emp.id)), emp); 
+                    } catch(e) { console.error(e); setIsOffline(true); } // Fallback
+                } 
+                // Always update local state
+                const newEmps = employees.some(e=>e.id===emp.id) ? employees.map(e=>e.id===emp.id?emp:e) : [...employees, emp]; 
+                setEmployees(newEmps); 
+            };
+
+            const delEmp = async (id) => { 
+                if (db && user && !isOffline) { 
+                    try {
+                        const { doc, deleteDoc } = window.firebaseModules; 
+                        await deleteDoc(doc(db, 'payroll_system', user.uid, 'employees', String(id))); 
+                    } catch(e) { console.error(e); setIsOffline(true); }
+                } 
+                setEmployees(prev => prev.filter(e=>e.id!==id)); 
+            };
+
+            const savePay = async (data) => { 
+                if (db && user && !isOffline) { 
+                    try {
+                        const { doc, setDoc } = window.firebaseModules; 
+                        const key = `${data.empId}_${data.period}`; 
+                        await setDoc(doc(db, 'payroll_system', user.uid, 'payroll', key), data); 
+                    } catch(e) { console.error(e); setIsOffline(true); }
+                } 
+                setPayrollData(prev => { const idx = prev.findIndex(p=>p.empId===data.empId && p.period===data.period); if(idx>=0) { const n=[...prev]; n[idx]=data; return n; } return [...prev, data]; }); 
+            };
+
+            const saveStat = async (period, status) => { 
+                if (db && user && !isOffline) { 
+                    try {
+                        const { doc, setDoc } = window.firebaseModules; 
+                        await setDoc(doc(db, 'payroll_system', user.uid, 'status', period), { status }); 
+                    } catch(e) { console.error(e); setIsOffline(true); }
+                } 
+                setMonthlyStatus(prev => ({...prev, [period]: status})); 
+            };
 
             const isLocked = monthlyStatus[currentPeriod] === 'locked';
             const toggleLock = () => { if(confirm(`確定要${isLocked?'解除結案':'結案'}?`)) saveStat(currentPeriod, isLocked?'active':'locked'); };
@@ -575,9 +633,10 @@
                 <div className="min-h-screen pb-24 md:pb-10 bg-gray-50">
                     <nav className="bg-slate-800 text-white shadow-lg print-hidden sticky top-0 z-40 hidden md:block">
                         <div className="max-w-7xl mx-auto px-4 flex justify-between h-16 items-center">
-                            <div className="flex items-center space-x-2"><Icons.Calculator className="w-6 h-6 text-yellow-400"/><span className="font-bold text-xl">薪資管理系統 V36.0</span></div>
+                            <div className="flex items-center space-x-2"><Icons.Calculator className="w-6 h-6 text-yellow-400"/><span className="font-bold text-xl">薪資管理系統 V36.1</span></div>
                             <div className="flex space-x-2">
-                                {user && <span className="flex items-center text-xs text-green-400 mr-4"><Icons.Cloud className="w-3 h-3 mr-1"/> 雲端同步</span>}
+                                {isOffline && <span className="offline-badge mr-2 animate-pulse">⚠️ 離線模式 (配額額滿)</span>}
+                                {user && !isOffline && <span className="flex items-center text-xs text-green-400 mr-4"><Icons.Cloud className="w-3 h-3 mr-1"/> 雲端同步</span>}
                                 <button onClick={()=>setActiveTab('employees')} className={`px-3 py-1 rounded ${activeTab==='employees'?'bg-yellow-500 text-black':'hover:bg-slate-700'}`}>員工設定</button>
                                 <button onClick={()=>setActiveTab('input')} className={`px-3 py-1 rounded ${activeTab==='input'?'bg-yellow-500 text-black':'hover:bg-slate-700'}`}>結算</button>
                                 <button onClick={()=>setActiveTab('print')} className={`px-3 py-1 rounded ${activeTab==='print'?'bg-yellow-500 text-black':'hover:bg-slate-700'}`}>報表列印</button>
