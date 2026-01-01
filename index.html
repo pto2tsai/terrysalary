@@ -174,6 +174,10 @@
                 gap: 30px;
                 padding: 20px;
             }
+            .print-header-block {
+                width: 210mm;
+                margin: 0 auto;
+            }
             .print-page { 
                 width: 210mm; 
                 height: 296mm; 
@@ -191,6 +195,9 @@
                      align-items: stretch;
                      padding: 10px;
                      gap: 10px;
+                }
+                .print-header-block {
+                    width: 100%;
                 }
                 .print-page { 
                     width: 100%; 
@@ -1124,8 +1131,21 @@
                     defaultBusinessBonus: Number(fd.get('defaultBusinessBonus')) || 0,
                     pensionRate: Number(fd.get('pensionRate')) || CONFIG.DEFAULT_PENSION_RATE
                 }; 
-                await saveEmp(newEmp); 
-                toast.success(editingEmp ? '員工資料已更新' : '新員工已新增');
+                await saveEmp(newEmp);
+                
+                // V38.3: 同步更新當月結算分頁的業務獎金 (僅限未結案)
+                if (!isLocked) {
+                    const newBusinessBonus = Number(fd.get('defaultBusinessBonus')) || 0;
+                    const existingPayroll = payrollData.find(p => p.empId === newEmp.empId && p.period === currentPeriod);
+                    const updatedPayroll = existingPayroll 
+                        ? { ...existingPayroll, businessBonus: newBusinessBonus }
+                        : { empId: newEmp.empId, period: currentPeriod, businessBonus: newBusinessBonus };
+                    await savePay(updatedPayroll);
+                    toast.success(editingEmp ? '員工資料已更新，當月業務獎金已同步' : '新員工已新增');
+                } else {
+                    toast.success(editingEmp ? '員工資料已更新 (本月已結案，業務獎金未同步)' : '新員工已新增');
+                }
+                
                 setIsEmpModalOpen(false); 
             };
 
@@ -1218,7 +1238,7 @@
                                             <tr>
                                                 <th className="p-3 checkbox-cell"><input type="checkbox" className="checkbox-input" checked={selectedEmpIds.size === sortedEmployees.length && sortedEmployees.length > 0} onChange={toggleSelectAll}/></th>
                                                 <th className="p-3">部門</th><th className="p-3">編號</th><th className="p-3">姓名</th><th className="p-3">職位</th><th className="p-3">底薪</th>
-                                                <th className="p-3">勞保投保</th><th className="p-3">健保投保</th><th className="p-3">預設業務</th><th className="p-3">操作</th>
+                                                <th className="p-3">勞保投保</th><th className="p-3">健保投保</th><th className="p-3">業務獎金</th><th className="p-3">操作</th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -1351,9 +1371,16 @@
 
                         {activeTab === 'print' && (
                             <div className="print-block space-y-4 screen-preview-container">
-                                <div className="bg-white p-4 rounded shadow print-hidden col-span-full">
-                                    <h2 className="text-lg font-bold mb-2">報表預覽 (電腦版：2欄卡片)</h2>
-                                    <div className="flex space-x-2"><button onClick={handleExportPaymentList} className="flex-1 py-3 bg-emerald-600 text-white rounded font-bold flex items-center justify-center"><Icons.Download className="w-5 h-5 mr-2"/> 匯出 Excel</button><button onClick={()=>window.print()} className="flex-1 py-3 bg-slate-800 text-white rounded font-bold">列印薪資單</button></div>
+                                <div className="bg-white p-4 rounded shadow print-hidden print-header-block">
+                                    <h2 className="text-lg font-bold mb-3">📄 報表預覽 (電腦版：2欄卡片)</h2>
+                                    <div className="flex space-x-3">
+                                        <button onClick={handleExportPaymentList} className="flex-1 py-3 bg-emerald-600 text-white rounded-lg font-bold flex items-center justify-center hover:bg-emerald-700 transition">
+                                            <Icons.Download className="w-5 h-5 mr-2"/> 匯出 Excel
+                                        </button>
+                                        <button onClick={()=>window.print()} className="flex-1 py-3 bg-slate-800 text-white rounded-lg font-bold hover:bg-slate-900 transition">
+                                            🖨️ 列印薪資單
+                                        </button>
+                                    </div>
                                 </div>
                                 
                                 <div id="print-container-root">
@@ -1378,7 +1405,7 @@
                                                             {item.payNoLunch > 0 && <div className="item-row"><span className="item-label">中午未休</span><span className="item-value">${formatNumber(item.payNoLunch)}</span></div>}
                                                             {item.payHolidayOT > 0 && <div className="item-row"><span className="item-label">休假加班</span><span className="item-value">${formatNumber(item.payHolidayOT)}</span></div>}
                                                             {item.lunchAllowance > 0 && <div className="item-row"><span className="item-label">午餐津貼</span><span className="item-value">${formatNumber(item.lunchAllowance)}</span></div>}
-                                                            {item.businessBonus > 0 && <div className="item-row"><span className="item-label">業務加給</span><span className="item-value">${formatNumber(item.businessBonus)}</span></div>}
+                                                            {item.businessBonus > 0 && <div className="item-row"><span className="item-label">業務獎金</span><span className="item-value">${formatNumber(item.businessBonus)}</span></div>}
                                                             {item.otherBonus > 0 && <div className="item-row"><span className="item-label">其它加項</span><span className="item-value">${formatNumber(item.otherBonus)}</span></div>}
                                                             <div className="subtotal-row"><span>應發合計</span><span>${formatNumber(item.grossPay)}</span></div>
                                                         </div>
@@ -1665,8 +1692,8 @@
                                                         <input name="baseSalary" type="number" defaultValue={editingEmp?.baseSalary} placeholder="底薪" className="border p-1.5 rounded text-sm w-full"/>
                                                     </div>
                                                     <div>
-                                                        <label className="text-xs text-gray-400">業務加給</label>
-                                                        <input name="defaultBusinessBonus" type="number" defaultValue={editingEmp?.defaultBusinessBonus} placeholder="業務加給" className="border p-1.5 rounded text-sm w-full"/>
+                                                        <label className="text-xs text-gray-400">業務獎金</label>
+                                                        <input name="defaultBusinessBonus" type="number" defaultValue={editingEmp?.defaultBusinessBonus} placeholder="業務獎金" className="border p-1.5 rounded text-sm w-full"/>
                                                     </div>
                                                 </div>
                                                 <div>
